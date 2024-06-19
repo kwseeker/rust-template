@@ -1,0 +1,31 @@
+[package]
+name = "getting-started"
+version = "0.1.0"
+edition = "2021"
+authors = ["Arvin Lee"]
+description = "Rust学习项目，参考ripgrep项目"
+#build = "build.rs"     # 用于自定义构建逻辑，在编译过程的开始阶段运行
+autotests = false       # 关闭自动测试
+
+# 二进制文件定制化修改配置
+[[bin]]
+name = "gs"
+path = "crates/core/main.rs"    # 指定main入口文件路径
+
+# 这里将测试放到单独的目录下
+[[test]]
+name = "unit"
+path = "tests/tests.rs"     #根测试模块，里面声明子测试模块
+
+[workspace]
+members = [
+
+]
+
+[dependencies]
+lexopt = "0.3.0"
+
+[profile.release]
+debug = true
+
+

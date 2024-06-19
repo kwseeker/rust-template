@@ -1,0 +1,9 @@
+.*.swp
+tags
+target
+Cargo.lock
+.idea
+
+# Cargo timings
+cargo-timing-*.html
+cargo-timing.html
