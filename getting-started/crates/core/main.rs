@@ -10,6 +10,7 @@ use crate::options::{HiArgs, ParseResult};
 // mod options 表示从 options.rs 或 options/mod.rs 中查找模块代码
 // 这里是通过 options 模块的 mod.rs 以及 mod.rs 中通过 mod 声明的模块，将全部代码联系起来的
 mod options;
+mod logger;
 
 // Rust 函数定义格式 fn function_name(parameters) -> return_type {...}
 fn main() -> ExitCode {

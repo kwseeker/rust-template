@@ -6,11 +6,11 @@ pub(crate) struct HiArgs {
 
 impl HiArgs {
     //相当于其他语言的静态方法
-    pub fn new(val: &str) -> HiArgs {
+    pub(crate) fn new(val: &str) -> HiArgs {
         HiArgs { raw: String::from(val) }
     }
 
-    pub fn raw(&self) -> &String {
+    pub(crate) fn raw(&self) -> &String {
         &self.raw
     }
 }
