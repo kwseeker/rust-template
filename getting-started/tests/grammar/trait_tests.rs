@@ -25,7 +25,7 @@ pub trait Fly {
 
 pub trait Work {
     fn work(&self);
-    fn do_something();
+    // fn do_something();
 }
 
 pub trait Live {
@@ -56,9 +56,9 @@ impl Work for Human {
     }
 
     //这是一个函数，不是方法
-    fn do_something() {
-        println!("do something ...");
-    }
+    // fn do_something() {
+    //     println!("do something ...");
+    // }
 }
 
 impl Live for Bird {
@@ -77,6 +77,11 @@ impl Fly for Bird {
     }
 }
 
+//dyn Work 表示只需要传递一个实现了 Work Trait 的实例，不需要实际类型为 Work
+fn dyn_usage(worker: &'static dyn Work) {
+    worker.work()
+}
+
 #[test]
 fn test_trait() {
     // let human = Human{};
@@ -86,11 +91,20 @@ fn test_trait() {
     human.eat();
     human.drink();
     human.work();
-    Human::do_something();
+    // Human::do_something();
     bird.eat();
     bird.drink();
     bird.fly();
 }
+
+
+#[test]
+fn test_dyn_trait() {
+    let human: &'static Human = &Human { 0: () };
+    //动态派发
+    dyn_usage(human);
+}
+
 
 // ------------------------------------------------------------------
 // Trait 派生
