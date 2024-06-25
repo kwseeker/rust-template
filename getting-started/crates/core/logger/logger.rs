@@ -1,7 +1,7 @@
 //Rust 官方日志门面
 // "https://github.com/rust-lang/log"
 
-//Log 是一个 Trait
+use anyhow::anyhow;
 use log::{debug, Log, Metadata, Record};
 use crate::eprintln_locked;
 
@@ -63,10 +63,10 @@ impl Log for Logger {
     }
 }
 
-pub(crate) fn init() -> Result<(), log::SetLoggerError> {
+pub(crate) fn init() -> Result<(), anyhow::Error> {
     if let Err(err) = Logger::init() {
         println!("failed to initialize logger: {err}");
-        return Err(err);
+        return Err(anyhow!("failed to initialize logger: {err}"));
     }
     log::set_max_level(log::LevelFilter::Info);
     debug!("init log done!");
