@@ -2,7 +2,7 @@
 // "https://github.com/rust-lang/log"
 
 //Log 是一个 Trait
-use log::{Log, Metadata, Record};
+use log::{debug, Log, Metadata, Record};
 use crate::eprintln_locked;
 
 #[derive(Debug)]
@@ -15,7 +15,6 @@ const LOGGER: &'static Logger = &Logger(());
 
 impl Logger {
     pub(crate) fn init() -> Result<(), log::SetLoggerError> {
-        //
         log::set_logger(LOGGER)
     }
 }
@@ -64,10 +63,20 @@ impl Log for Logger {
     }
 }
 
+pub(crate) fn init() -> Result<(), log::SetLoggerError> {
+    if let Err(err) = Logger::init() {
+        println!("failed to initialize logger: {err}");
+        return Err(err);
+    }
+    log::set_max_level(log::LevelFilter::Info);
+    debug!("init log done!");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use log::{info};
-    use crate::log::logger::Logger;
+    use crate::logger::logger::Logger;
 
     #[test]
     fn log() {
@@ -76,6 +85,6 @@ mod tests {
             return;
         }
         log::set_max_level(log::LevelFilter::Info);
-        info!("info log message ...");
+        info!("info logger message ...");
     }
 }

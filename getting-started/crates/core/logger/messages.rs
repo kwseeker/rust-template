@@ -1,7 +1,7 @@
-
+// 这个宏用于同步（锁）将信息输出到标准输出或标准错误
 #[macro_export]
 macro_rules! eprintln_locked {
-    ($($tt:tt)*) => {{
+    ($($tt:tt)*) => {{   //tt 分类符用于匹配标记树 (TokenTree)，它能匹配几乎所有东西
         {
             use std::io::Write;
 

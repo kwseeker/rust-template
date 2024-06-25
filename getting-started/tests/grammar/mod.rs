@@ -6,6 +6,7 @@ mod life_cycle;
 mod trait_tests;
 mod concurrency_tests;
 mod ownership_tests;
+mod macro_tests;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]
