@@ -1,5 +1,7 @@
 # Rust开发环境安装
 
+## Rust安装
+
 参考[安装Rust](https://www.rust-lang.org/zh-CN/tools/install#/)。
 
 ```shell
@@ -176,4 +178,16 @@ rustc 1.79.0 (129f3b996 2024-06-10)
 ~ rustup update
 ~ rustup self uninstall
 ```
+
+## Rust IDE
+
+### RustRover
+
++ 运行/调试配置
+
+  添加程序参数（参考[Cargo run/debug configuration](https://www.jetbrains.com/help/rust/cargo-run-debug-configuration.html)）：格式`[command] [build options] [--] [program arguments]`。
+
+  比如：`run --package getting-started --bin gs -- version`
+
+  > 浏览器搜索竟然没有搜到结果，只能去RustRover官网查，最终查到上面方法。
 
