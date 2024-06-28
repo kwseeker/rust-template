@@ -4,6 +4,15 @@ use std::fmt::Debug;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 //pub(crate) use 让其他模块可以通过当前options模块访问
 pub(crate) use crate::options::{
+    doc::{
+        help::{
+            generate_short as generate_help_short,  //重命名 options::doc::help::generate_short 为 options::generate_help_short
+        },
+        version::{
+            generate_long as generate_version_long,
+            generate_short as generate_version_short,
+        },
+    },
     hiargs::HiArgs,     // 这一步相当于将 crate::options::hiargs::HiArgs 缩短为了 crate::options::HiArgs
     parse::{parse, ParseResult},
 };
@@ -15,6 +24,7 @@ mod parse;
 pub(crate) mod hiargs;
 pub(crate) mod lowargs;
 mod defs;
+mod doc;
 
 //命令行选项特征
 trait Flag: Debug + Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
@@ -32,8 +42,28 @@ trait Flag: Debug + Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
     fn name_negated(&self) -> Option<&'static str> {
         None
     }
-    //简短说明文档
+    //选项分类
+    fn doc_category(&self) -> Category;
+    //简短说明信息
     fn doc_short(&self) -> &'static str;
-    //详细说明文档
+    //详细说明信息
     // fn doc_long(&self) -> &'static str;
+}
+
+/// 选项分类
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+enum Category {
+    Output,
+    Logging,
+    OtherBehaviors,
+}
+
+impl Category {
+    fn as_str(&self) -> &'static str {
+        match *self {
+            Category::Output => "output",
+            Category::Logging => "logging",
+            Category::OtherBehaviors => "other-behaviors",
+        }
+    }
 }

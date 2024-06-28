@@ -71,8 +71,8 @@ fn test_deconstruct() {
     match p {
         //y必须为0
         Point { x, y: 0 } => println!("On the x axis at {x}"),
-        // Point { x: 0, y } => println!("On the y axis at {y}"),
-        Point { x: 0, y: 1..=10 } => println!("On the y axis and y between [1,10] at {y}"),
+        Point { x: 0, y } => println!("On the y axis at {y}"),
+        // Point { x: 0, y: 1..=10 } => println!("On the y axis and y between [1,10] at {y}"),
         Point { x, y } => {
             println!("On neither axis: ({x}, {y})");
         }

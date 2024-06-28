@@ -1,0 +1,37 @@
+gs !!VERSION!!
+
+gs recursively searches the current directory for lines matching
+a regex pattern. By default, gs will respect gitignore rules and
+automatically skip hidden files/directories and binary files.
+
+Use -h for short descriptions and --help for more details.
+
+Project home page: https://github.com/BurntSushi/ripgrep
+
+USAGE:
+  gs [OPTIONS] PATTERN [PATH ...]
+
+POSITIONAL ARGUMENTS:
+  <PATTERN>   A regular expression used for searching.
+  <PATH>...   A file or directory to search.
+
+INPUT OPTIONS:
+!!input!!
+
+SEARCH OPTIONS:
+!!search!!
+
+FILTER OPTIONS:
+!!filter!!
+
+OUTPUT OPTIONS:
+!!output!!
+
+OUTPUT MODES:
+!!output-modes!!
+
+LOGGING OPTIONS:
+!!logging!!
+
+OTHER BEHAVIORS:
+!!other-behaviors!!

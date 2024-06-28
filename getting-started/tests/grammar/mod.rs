@@ -14,6 +14,7 @@ mod trait_constraint_tests;
 mod pointer_tests;
 mod patterns_tests;
 mod data_type_convert_tests;
+mod macros_stdlib_tests;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]

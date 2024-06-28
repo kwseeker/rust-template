@@ -13,7 +13,7 @@ use crate::options::{
     hiargs::HiArgs,
     lowargs::LowArgs,
 };
-use crate::options::lowargs::SpecialMode;
+use crate::options::lowargs::{LoggingMode, SpecialMode};
 
 #[derive(Debug)]
 struct Parser {
@@ -103,8 +103,6 @@ impl Parser {
                     continue;
                 }
             };
-
-
         }
         Ok(())
     }
@@ -122,17 +120,27 @@ impl Parser {
     }
 
     fn find_long(&self, name: &str) -> FlagLookup<'_> {
-
         FlagLookup::UnrecognizedLong(String::from(name))
     }
-
 }
 
 #[derive(Debug)]
 pub(crate) enum ParseResult<T> {
-    // Special(SpecialMode),
+    Special(SpecialMode),
     Ok(T),
     Err(anyhow::Error),
+}
+
+impl<T> ParseResult<T> {
+    /// 针对非特殊选项、非错误解析结果，传递一个闭包做进一步处理
+    /// 对于特殊选项、错误解析结果则原样返回
+    fn and_then<U>(self, mut then: impl FnMut(T) -> ParseResult<U>) -> ParseResult<U> { //注意这里第一个参数是self
+        match self {
+            ParseResult::Special(mode) => ParseResult::Special(mode),
+            ParseResult::Ok(t) => then(t),
+            ParseResult::Err(err) => ParseResult::Err(err),
+        }
+    }
 }
 
 // 解析命令行参数到 LowArgs 然后转换成 HiArgs 类实例
@@ -140,10 +148,12 @@ pub(crate) fn parse() -> ParseResult<HiArgs> {
     //读取命令行参数
     let argv: Vec<OsString> = env::args_os().skip(1).collect();    // collect() 将 Skip<ArgsOs> 转 Vec<OsString>
     print_args(argv.iter().cloned());   //TODO: 这里的原理
-    //Parser 解析命令行参数为 LowArgs
-    parse_low(argv.iter().cloned());
-
-    return ParseResult::Ok(HiArgs::default());
+    //Parser 解析命令行参数为 LowArgs， 再根据选项类型决定是否进行进步解析
+    parse_low(argv.iter().cloned())
+        .and_then(|low| match HiArgs::from_low_args(low) {
+            Ok(hi) => ParseResult::Ok(hi),
+            Err(err) => ParseResult::Err(err),
+        })
 }
 
 fn print_args<I: IntoIterator<Item=OsString>>(args: I) {
@@ -169,9 +179,27 @@ where
     }
 
     //设置日志输出级别，ripgrep 是将日志级别控制也加入到了命令行选项中
-    //set_log_levels(&low);
+    set_log_levels(&low);
+
+    //特殊选项处理
+    if let Some(special) = low.special.take() { //take() 方法会返回Option中的值并替换为None，即取走
+        return ParseResult::Special(special);
+    }
 
     return ParseResult::Ok(low);
+}
+
+/// FLAGS 有一个命令行参数，用于设置日志输出级别
+fn set_log_levels(low: &LowArgs) {
+    match low.logging {
+        Some(LoggingMode::Trace) => {
+            log::set_max_level(log::LevelFilter::Trace)
+        }
+        Some(LoggingMode::Debug) => {
+            log::set_max_level(log::LevelFilter::Debug)
+        }
+        None => log::set_max_level(log::LevelFilter::Warn)      //默认级别是警告
+    }
 }
 
 //命令行选项索引的Map
