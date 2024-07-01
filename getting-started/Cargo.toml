@@ -19,7 +19,7 @@ path = "tests/tests.rs"     #根测试模块，里面声明子测试模块
 
 [workspace]
 members = [
-
+    "crates/searcher"
 ]
 
 [dependencies]
