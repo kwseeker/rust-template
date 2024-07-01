@@ -6,6 +6,7 @@ pub(super) const FLAGS: &[&dyn Flag] = &[   //FLAGS是一个数组引用，数�
     &Help,
     &Version,
     &Debug,
+    &IgnoreCase,
 ];
 
 /// -h/--help
@@ -73,13 +74,37 @@ impl Flag for Debug {
 }
 
 /// -i/--ignore-case
+/// 忽略大小写
 #[derive(Debug)]
 struct IgnoreCase;
 
+impl Flag for IgnoreCase {
+    fn name_long(&self) -> &'static str {
+        "ignore-case"
+    }
+
+    fn name_short(&self) -> Option<u8> {
+        Some(b'i')
+    }
+
+    fn doc_category(&self) -> Category {
+        Category::Search
+    }
+
+    fn doc_short(&self) -> &'static str {
+        r"Case insensitive search."
+    }
+}
+
 /// -s/--case-sensitive
-/// 是否对大小写敏感
+/// 大小写敏感搜索
 #[derive(Debug)]
 struct CaseSensitive;
+
+/// -n/--line-number
+/// 展示匹配行的行号
+#[derive(Debug)]
+struct LineNumber;
 
 /// -r/--replace
 /// 匹配后替换
@@ -101,10 +126,6 @@ struct Sort;
 /// -m/--max-count
 #[derive(Debug)]
 struct MaxCount;
-
-/// -n/--line-number
-#[derive(Debug)]
-struct LineNumber;
 
 /// -e/--regexp
 /// 基于正则表达式进行匹配查找

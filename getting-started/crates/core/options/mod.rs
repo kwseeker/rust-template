@@ -56,6 +56,7 @@ enum Category {
     Output,
     Logging,
     OtherBehaviors,
+    Search,
 }
 
 impl Category {
@@ -64,6 +65,7 @@ impl Category {
             Category::Output => "output",
             Category::Logging => "logging",
             Category::OtherBehaviors => "other-behaviors",
+            Category::Search => "search",
         }
     }
 }

@@ -65,7 +65,7 @@ impl Parser {
         })
     }
 
-    //将命令行参数解析为 LowArgs
+    //将命令行参数解析为 LowArgs（某次执行实际设置了哪些选项，加上默认开启的选项）
     fn parse<I, O>(&self, raw_args: I, args: &mut LowArgs) -> anyhow::Result<()>
     where
         I: IntoIterator<Item=O>,
@@ -95,14 +95,18 @@ impl Parser {
                     args.special = Some(SpecialMode::VersionLong);
                     continue;
                 }
-                //其他参数，其实上面单独匹配的参数可以删除，因为在FLAGS中已经加上了对应选项的Flag实现
+                //其他命令行选项，其实上面单独匹配的参数可以删除，因为在FLAGS中已经加上了对应选项的Flag实现
                 Arg::Short(ch) => self.find_short(ch),
                 Arg::Long(name) => self.find_long(name),
+                //命名行参数（比如 gs [OPTIONS] PATTERN [PATH ...] 中的 PATTERN、PATH）
                 Arg::Value(value) => {
                     args.positional.push(value);
                     continue;
                 }
             };
+
+            //除了特殊选项、Pattern、Path，其他参数（都是非特殊选项）需要进一步处理：设置开启（直接在Parser info中修改）
+
         }
         Ok(())
     }
@@ -183,8 +187,12 @@ where
 
     //特殊选项处理
     if let Some(special) = low.special.take() { //take() 方法会返回Option中的值并替换为None，即取走
+        //这里return即有特殊选项不会执行其他选项的处理
         return ParseResult::Special(special);
     }
+
+    //非特殊选项的进一步处理
+    //ripgrep 这一步是为了支持从配置文件中加载拓展的命令行参数，这个功能不是核心，忽略
 
     return ParseResult::Ok(low);
 }

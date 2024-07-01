@@ -8,12 +8,13 @@ use lexopt::{prelude::*};
 use crate::logger::logger::Logger;
 // 得益于 options/mod.rs 的 "pub(crate) use crate::options::hiargs::HiArgs" 这里才可以写的短一些
 use crate::options::{HiArgs, ParseResult};
-use crate::options::lowargs::SpecialMode;
+use crate::options::lowargs::{Mode, SearchMode, SpecialMode};
 
 // mod options 表示从 options.rs 或 options/mod.rs 中查找模块代码
 // 这里是通过 options 模块的 mod.rs 以及 mod.rs 中通过 mod 声明的模块，将全部代码联系起来的
 mod options;
 mod logger;
+mod search;
 
 // Rust 函数定义格式 fn function_name(parameters) -> return_type {...}
 fn main() -> ExitCode {
@@ -44,7 +45,13 @@ fn run(result: ParseResult<HiArgs>) -> anyhow::Result<ExitCode> {
         ParseResult::Ok(args) => args,                          //非特殊选项解构
     };
 
-    //非特殊选项处理
+    //非特殊选项处理，即根据工作模式选择对应的处理
+    let matched = match args.mode() {
+        Mode::Search(_) if !args.matches_possible() => false,               //Search 模式需要先检查下 PATTERN 值是否为空
+        Mode::Search(mode) if args.threads() == 1 => search(&args, mode)?,  //单线程搜索
+        Mode::Search(mode) => search_parallel(&args, mode)?,                //并发搜索
+        Mode::Files => true,                                                //TODO
+    };
 
     Ok(ExitCode::SUCCESS)
 }
@@ -59,6 +66,21 @@ fn special(mode: SpecialMode) -> anyhow::Result<ExitCode> {
     // 打印到标准输出
     writeln!(std::io::stdout(), "{}", output.trim_end())?;
     Ok(ExitCode::SUCCESS)
+}
+
+/// 单线程搜索
+/// 执行搜索前的准备（此方法执行前完成）：解析设置的匹配机制、PATTERN、PATH、输出目的地
+fn search(args: &HiArgs, mode: SearchMode) -> anyhow::Result<bool> {
+    //创建SearchWorker
+
+
+    Ok(true)
+}
+
+/// 并发搜索
+fn search_parallel(args: &HiArgs, mode: SearchMode) -> anyhow::Result<bool> {
+    //TODO
+    Ok(true)
 }
 
 // 条件编译宏，这里表示只有在执行cargo test才会编译和运行tests模块
