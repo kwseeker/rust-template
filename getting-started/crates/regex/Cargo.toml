@@ -1,0 +1,11 @@
+[package]
+name = "regex"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bstr = "1.6.2"
+grep-matcher = { version = "0.1.0", path = "../matcher" }
+log = "0.4.20"
+regex-automata = { version = "0.4.0" }
+regex-syntax = "0.8.0"
