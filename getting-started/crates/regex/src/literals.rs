@@ -148,6 +148,75 @@ impl Extractor {
             Alternation(ref hirs) => self.extract_alternation(hirs.iter()),
         }
     }
+
+    fn enforce_literal_len(&self, seq: &mut TSeq) {
+        seq.keep_first_bytes(self.limit_literal_len);
+    }
+
+    fn extract_class_unicode(&self, cls: &hir::ClassUnicode) -> TSeq {
+        if self.class_over_limit_unicode(cls) {
+            return TSeq::infinite();
+        }
+        let mut seq = TSeq::empty();
+        for r in cls.iter() {
+            for ch in r.start()..=r.end() {
+                seq.push(Literal::from(ch));
+            }
+        }
+        self.enforce_literal_len(&mut seq);
+        seq
+    }
+
+    fn class_over_limit_unicode(&self, cls: &hir::ClassUnicode) -> bool {
+        let mut count = 0;
+        for r in cls.iter() {
+            if count > self.limit_class {
+                return true;
+            }
+            count += r.len();
+        }
+        count > self.limit_class
+    }
+
+    fn class_over_limit_bytes(&self, cls: &hir::ClassBytes) -> bool {
+        let mut count = 0;
+        for r in cls.iter() {
+            if count > self.limit_class {
+                return true;
+            }
+            count += r.len();
+        }
+        count > self.limit_class
+    }
+
+    fn extract_class_bytes(&self, cls: &hir::ClassBytes) -> TSeq {
+        if self.class_over_limit_bytes(cls) {
+            return TSeq::infinite();
+        }
+        let mut seq = TSeq::empty();
+        for r in cls.iter() {
+            for b in r.start()..=r.end() {
+                seq.push(Literal::from(b));
+            }
+        }
+        self.enforce_literal_len(&mut seq);
+        seq
+    }
+
+    fn extract_repetition(&self, rep: &hir::Repetition) -> TSeq {
+        // TODO
+        TSeq::empty()
+    }
+
+    fn extract_concat<'a, I: Iterator<Item = &'a Hir>>(&self, it: I) -> TSeq {
+        // TODO
+        TSeq::empty()
+    }
+
+    fn extract_alternation<'a, I: Iterator<Item = &'a Hir>>(&self, it: I) -> TSeq {
+        // TODO
+        TSeq::empty()
+    }
 }
 
 #[derive(Clone, Debug)]

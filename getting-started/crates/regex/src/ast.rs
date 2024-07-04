@@ -1,3 +1,4 @@
+use regex_syntax::ast;
 use regex_syntax::ast::Ast;
 
 /// 正则表达式抽象语法树的解析结果
@@ -22,6 +23,14 @@ impl AstAnalysis {
         let mut analysis = AstAnalysis::new();
         analysis.from_ast_impl(ast);
         analysis
+    }
+
+    pub(crate) fn any_uppercase(&self) -> bool {
+        self.any_uppercase
+    }
+
+    pub(crate) fn any_literal(&self) -> bool {
+        self.any_literal
     }
 
     fn from_ast_impl(&mut self, ast: &Ast) {
@@ -56,6 +65,53 @@ impl AstAnalysis {
             Ast::Concat(ref alt) => {
                 for x in &alt.asts {
                     self.from_ast_impl(x);
+                }
+            }
+        }
+    }
+
+    fn from_ast_literal(&mut self, ast: &ast::Literal) {
+        self.any_literal = true;
+        self.any_uppercase = self.any_uppercase || ast.c.is_uppercase();
+    }
+
+    fn from_ast_class_set(&mut self, ast: &ast::ClassSet) {
+        if self.done() {
+            return;
+        }
+        match *ast {
+            ast::ClassSet::Item(ref item) => {
+                self.from_ast_class_set_item(item);
+            }
+            ast::ClassSet::BinaryOp(ref x) => {
+                self.from_ast_class_set(&x.lhs);
+                self.from_ast_class_set(&x.rhs);
+            }
+        }
+    }
+
+    fn from_ast_class_set_item(&mut self, ast: &ast::ClassSetItem) {
+        if self.done() {
+            return;
+        }
+        match *ast {
+            ast::ClassSetItem::Empty(_)
+            | ast::ClassSetItem::Ascii(_)
+            | ast::ClassSetItem::Unicode(_)
+            | ast::ClassSetItem::Perl(_) => {}
+            ast::ClassSetItem::Literal(ref x) => {
+                self.from_ast_literal(x);
+            }
+            ast::ClassSetItem::Range(ref x) => {
+                self.from_ast_literal(&x.start);
+                self.from_ast_literal(&x.end);
+            }
+            ast::ClassSetItem::Bracketed(ref x) => {
+                self.from_ast_class_set(&x.kind);
+            }
+            ast::ClassSetItem::Union(ref union) => {
+                for x in &union.items {
+                    self.from_ast_class_set_item(x);
                 }
             }
         }

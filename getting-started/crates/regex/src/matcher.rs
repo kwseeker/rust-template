@@ -1,6 +1,6 @@
 use regex_automata::Input;
 use regex_automata::meta::Regex;
-use grep_matcher::{ByteSet, Match, Matcher, NoError};
+use grep_matcher::{ByteSet, LineTerminator, Match, Matcher, NoError};
 use crate::config::Config;
 use crate::error::Error;
 use crate::literals::InnerLiterals;
@@ -15,7 +15,7 @@ use crate::literals::InnerLiterals;
 /// 1）先将正则表达式字符串经过 regex_syntax 语法解析器转成 Hir
 /// 2) 通过 Hir 创建正则匹配器 Regex
 /// 3) 匹配器匹配字符串获取匹配结果
-/// 正则引擎详细工作流程还是较复杂的，可以参考 《精通正则表达式》略窥一二，应该可以帮助理解正则表达式中的配置项的使用
+/// 正则引擎详细工作流程还是较复杂的，可以参考 《精通正则表达式》略窥一二，应该可以帮助理解正则表达式中的配置项的使用(浏览了下发现没帮助)
 
 #[derive(Clone, Debug)]
 pub struct RegexMatcherBuilder {
@@ -64,6 +64,47 @@ impl RegexMatcherBuilder {
         self.config.word = yes;
         self
     }
+
+    pub fn unicode(&mut self, yes: bool) -> &mut RegexMatcherBuilder {
+        self.config.unicode = yes;
+        self
+    }
+
+    pub fn octal(&mut self, yes: bool) -> &mut RegexMatcherBuilder {
+        self.config.octal = yes;
+        self
+    }
+
+    pub fn fixed_strings(&mut self, yes: bool) -> &mut RegexMatcherBuilder {
+        self.config.fixed_strings = yes;
+        self
+    }
+
+    pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexMatcherBuilder {
+        self.config.case_insensitive = yes;
+        self
+    }
+
+    pub fn dot_matches_new_line(
+        &mut self,
+        yes: bool,
+    ) -> &mut RegexMatcherBuilder {
+        self.config.dot_matches_new_line = yes;
+        self
+    }
+
+    pub fn line_terminator(
+        &mut self,
+        line_term: Option<u8>,
+    ) -> &mut RegexMatcherBuilder {
+        self.config.line_terminator = line_term.map(LineTerminator::byte);
+        self
+    }
+
+    pub fn ban_byte(&mut self, byte: Option<u8>) -> &mut RegexMatcherBuilder {
+        self.config.ban = byte;
+        self
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -98,18 +139,31 @@ mod tests {
     /// 参考 matcher_rust() 方法的流程
     #[test]
     fn ripgrep_default_match() {
-        let patterns = vec![String::from("complex")];
         let mut builder = RegexMatcherBuilder::new();
         builder.multi_line(true)
             .unicode(true)
             .octal(false)
-            .fixed_string(false)
+            .fixed_strings(false)
             .case_insensitive(true)
             .dot_matches_new_line(false)
             .line_terminator(Some(b'\n'))
             .ban_byte(Some(b'\x00'));
-        let matcher = builder.build_many(patterns).unwrap();
+
+        let patterns = vec![String::from("complex")];
+        let matcher = builder.build_many(&patterns).unwrap();
         let result = matcher.is_match("regex engine is complex".as_bytes()).unwrap();
         assert_eq!(true, result);
+
+        let patterns = vec![String::from("rgx")];
+        let matcher = builder.build_many(&patterns).unwrap();
+        let result = matcher.is_match("regex engine is complex".as_bytes()).unwrap();
+        assert_eq!(false, result);
+
+        let patterns = vec![String::from("^[A-Za-z\\s]+$")];    //匹配全部只包含英文字母和空白字符的字符串
+        let matcher = builder.build_many(&patterns).unwrap();
+        let result = matcher.is_match("regex engine is complex".as_bytes()).unwrap();
+        let result2 = matcher.is_match("2 regex engine is complex".as_bytes()).unwrap();
+        assert_eq!(true, result);
+        assert_eq!(false, result2);
     }
 }

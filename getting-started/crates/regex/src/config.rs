@@ -75,6 +75,16 @@ impl Config {
     pub(crate) fn build_many<P: AsRef<str>>(&self, patterns: &[P]) -> Result<ConfiguredHIR, Error> {
         ConfiguredHIR::new(self.clone(), patterns)
     }
+
+    fn is_case_insensitive(&self, analysis: &AstAnalysis) -> bool {
+        if self.case_insensitive {
+            return true;
+        }
+        if !self.case_smart {
+            return false;
+        }
+        analysis.any_literal() && !analysis.any_uppercase()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -109,7 +119,8 @@ impl ConfiguredHIR {
             .octal(config.octal)
             .ignore_whitespace(config.ignore_whitespace)
             .build();
-        let ast = parser.parse(&pattern).map_err(Error::generic)?;
+        let ast = parser.parse(&pattern)
+            .map_err(Error::generic)?;
         // 3 Hir
         let analysis = AstAnalysis::from_ast(&ast);
         let mut hir = hir::translate::TranslatorBuilder::new()
@@ -131,6 +142,10 @@ impl ConfiguredHIR {
             Some(line_term) => strip_from_match(hir, line_term)?,
         };
         Ok(ConfiguredHIR { config, hir })
+    }
+
+    pub(crate) fn config(&self) -> &Config {
+        &self.config
     }
 
     pub(crate) fn hir(&self) -> &Hir {
@@ -160,5 +175,13 @@ impl ConfiguredHIR {
 
     pub(crate) fn non_matching_bytes(&self) -> ByteSet {
         non_matching_bytes(&self.hir)
+    }
+
+    pub(crate) fn line_terminator(&self) -> Option<LineTerminator> {
+        if self.hir.properties().look_set().contains_anchor_haystack() {
+            None
+        } else {
+            self.config.line_terminator
+        }
     }
 }

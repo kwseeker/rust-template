@@ -13,6 +13,24 @@ impl LineTerminator {
     pub fn byte(byte: u8) -> LineTerminator {
         LineTerminator(LineTerminatorImp::Byte(byte))
     }
+
+    #[inline]
+    pub fn crlf() -> LineTerminator {
+        LineTerminator(LineTerminatorImp::CRLF)
+    }
+
+    #[inline]
+    pub fn is_crlf(&self) -> bool {
+        self.0 == LineTerminatorImp::CRLF
+    }
+
+    #[inline]
+    pub fn as_byte(&self) -> u8 {
+        match self.0 {
+            LineTerminatorImp::Byte(byte) => byte,
+            LineTerminatorImp::CRLF => b'\n',
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

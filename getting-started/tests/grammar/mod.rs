@@ -15,6 +15,10 @@ mod pointer_tests;
 mod patterns_tests;
 mod data_type_convert_tests;
 mod macros_stdlib_tests;
+mod oop_structure_tests;
+mod trait_as_ref_tests;
+mod pointer_smart_tests;
+mod macros_attribute_tests;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]
