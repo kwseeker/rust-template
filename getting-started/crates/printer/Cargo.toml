@@ -1,0 +1,10 @@
+[package]
+name = "grep-printer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+grep-matcher = { version = "0.1.0", path = "../matcher" }
+#grep-searcher = { version = "0.1.0", path = "../searcher" }
+termcolor = "1.3.0"
+log = "0.4.22"     # 提供了将彩色文本写入终端的跨平台抽象

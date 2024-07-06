@@ -19,6 +19,8 @@ mod oop_structure_tests;
 mod trait_as_ref_tests;
 mod pointer_smart_tests;
 mod macros_attribute_tests;
+mod data_type_slice_tests;
+mod data_type_str_tests;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]

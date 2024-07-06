@@ -12,3 +12,17 @@ fn test_tuple_structure() {
     let black = Color(0, 0, 0);
     let origin = Point(0, 0, 0);
 }
+
+#[test]
+fn test_structure_update() {
+    #[derive(Debug)]
+    struct Point {
+        a: i32,
+        b: i32,
+        c: i32,
+    }
+    let point = Point { a: 1, b: 2, c: 3 };
+    let a = 5;
+    let point2 = Point { a, ..point };  // 这里的 .. 是结构体更新语法
+    println!("{point2:?}")
+}

@@ -1,3 +1,60 @@
+/// 指向可寻址内存的连续块的可能为空的范围。
+/// 其实就是用于表示匹配字符串范围的，这里的匹配字符串可能是行、可能是行里匹配的字符串
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Match {
+    start: usize,
+    end: usize,
+}
+
+impl Match {
+    #[inline]
+    pub fn new(start: usize, end: usize) -> Match {
+        assert!(start <= end);
+        Match { start, end }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[inline]
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    #[inline]
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    #[inline]
+    pub fn with_start(&self, start: usize) -> Match {
+        Match { start, ..*self }    //结构体更新，这里只更新了 start, 其他值用的原值
+    }
+
+    #[inline]
+    pub fn with_end(&self, end: usize) -> Match {
+        assert!(self.start <= end, "{} is not <= {}", self.start, end);
+        Match { end, ..*self }
+    }
+}
+
+/// 为了使用 container[index] 这个容器的语法糖， container 需要实现 std::ops::Index 特征
+impl std::ops::Index<Match> for [u8] {
+    type Output = [u8];
+
+    #[inline]
+    fn index(&self, index: Match) -> &[u8] {
+        &self[index.start..index.end]
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct LineTerminator(LineTerminatorImp);
 
@@ -31,6 +88,20 @@ impl LineTerminator {
             LineTerminatorImp::CRLF => b'\n',
         }
     }
+
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        match self.0 {
+            LineTerminatorImp::Byte(ref byte) => std::slice::from_ref(byte),
+            LineTerminatorImp::CRLF => &[b'\r', b'\n'],
+        }
+    }
+
+    /// 判断当前 LineTerminator 是否是 slice 中的后缀
+    #[inline]
+    pub fn is_suffix(&self, slice: &[u8]) -> bool {
+        slice.last().map_or(false, |&b| b == self.as_byte())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -41,6 +112,7 @@ enum LineTerminatorImp {
     CRLF,
 }
 
+///
 #[derive(Clone, Debug)]
 pub struct ByteSet(BitSet);
 
@@ -115,20 +187,6 @@ impl ByteSet {
         let bucket = byte / 64;
         let bit = byte % 64;
         (self.0).0[usize::from(bucket)] & (1 << bit) > 0
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Match {
-    start: usize,
-    end: usize,
-}
-
-impl Match {
-    #[inline]
-    pub fn new(start: usize, end: usize) -> Match {
-        assert!(start <= end);
-        Match { start, end }
     }
 }
 
