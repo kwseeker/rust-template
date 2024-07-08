@@ -7,3 +7,5 @@ Cargo.lock
 # Cargo timings
 cargo-timing-*.html
 cargo-timing.html
+
+*.drawio.bkp

@@ -1,0 +1,12 @@
+[package]
+name = "encoding-rs-io-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 此库是 encoding_rs_io 的拓展库，可用于实现编码格式转换
+encoding_rs_io = "0.1.7"
+
+[[test]]
+name = "unit"
+path = "tests/tests.rs"

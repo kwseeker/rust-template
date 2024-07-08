@@ -2,7 +2,7 @@ mod oop_tests;
 mod mod_tests;
 mod option_tests;
 mod tuple_tests;
-mod life_cycle;
+mod lifetime;
 mod trait_tests;
 mod concurrency_tests;
 mod ownership_tests;
@@ -21,6 +21,11 @@ mod pointer_smart_tests;
 mod macros_attribute_tests;
 mod data_type_slice_tests;
 mod data_type_str_tests;
+mod lifetime_specifier;
+mod trait_marker;
+mod macro_derive;
+mod file;
+mod generic;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]

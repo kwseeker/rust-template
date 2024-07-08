@@ -3,11 +3,13 @@
 use std::cell::{Cell, RefCell};
 use std::{cmp, io};
 use std::io::Write;
+use std::path::Path;
 use termcolor::WriteColor;
 use grep_matcher::{LineTerminator, Match, Matcher};
+use grep_searcher::Sink;
 use crate::color::ColorSpecs;
 use crate::counter::CounterWriter;
-use crate::util::trim_ascii_prefix;
+use crate::util::{trim_ascii_prefix};
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -17,7 +19,8 @@ struct Config {
     trim_ascii: bool,
     /// 单行的长度最大值
     max_columns: Option<u64>,
-
+    /// 打印匹配数据时是否带上文件路径信息，默认带上
+    path: bool,
 }
 
 impl Default for Config {
@@ -26,6 +29,7 @@ impl Default for Config {
             colors: ColorSpecs::default(),
             trim_ascii: false,
             max_columns: None,
+            path: true,
         }
     }
 }
@@ -76,33 +80,58 @@ pub struct Standard<W> {
 }
 
 impl<W: WriteColor> Standard<W> {
+    // pub fn sink(&mut self) -> StandardSink<W> {
+    //     StandardSink {
+    //         standard: self,
+    //     }
+    // }
 
-    pub fn sink<'s>(&'s mut self) -> StandardSink<'s, W> {
+    /// 打印匹配信息时会带着文件路径信息
+    // pub fn sink_with_path<M>(
+    //     &mut self,
+    //     matcher: M,
+    //     path: &Path,
+    // ) -> StandardSink<M, W>
+    pub fn sink_with_path<'p, 's, M>(   //这种方式可以实现生命周期参数跨方法传递
+        &'s mut self,
+        matcher: M,
+        path: &'p Path,
+    ) -> StandardSink<'p, 's, M, W>
+    where
+        M: Matcher,
+    {
+        // if !self.config.path {  //如果设置打印时不带文件路径信息
+        //     return self.sink();
+        // }
+
+        // 带文件路径信息的处理
+        // 这一步是兼容不同系统不同的路径格式，这里不需要
+        // let ppath = PrinterPath::new(path.as_ref())
+        //     .with_separator(self.config.separator_path);
         StandardSink {
+            matcher,
             standard: self,
+            path,
+            match_count: 0,
         }
     }
 }
 
 ///
 #[derive(Debug)]
-// struct StandardImpl<'a, M: Matcher, W> {
-struct StandardImpl<'a, W> {
+struct StandardImpl<'a, M: Matcher, W> {
     // searcher: &'a Searcher,
-    // sink: &'a StandardSink<'a, 'a, M, W>,
-    sink: &'a StandardSink<'a, W>,
+    sink: &'a StandardSink<'a, 'a, M, W>,
     // sunk: Sunk<'a>,
     /// 是否已经为匹配的字段设置好颜色显示，当输出无颜色的字符串前清除（false），当输出有颜色的字符串前设置（true）
     in_color_match: Cell<bool>,
 }
 
-// impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
-impl<'a, W: WriteColor> StandardImpl<'a, W> {
-
+impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
     fn new(
         // searcher: &'a Searcher,
-        sink: &'a StandardSink<'_, W>,
-    ) -> StandardImpl<'a, W> {
+        sink: &'a StandardSink<'_, '_, M, W>,
+    ) -> StandardImpl<'a, M, W> {
         StandardImpl {
             // searcher,
             sink,
@@ -273,23 +302,36 @@ impl<'a, W: WriteColor> StandardImpl<'a, W> {
 
 /// 对
 #[derive(Debug)]
-// pub struct StandardSink<'p, 's, M: Matcher, W> {
-pub struct StandardSink<'s, W> {
-    // matcher: M,
+pub struct StandardSink<'p, 's, M: Matcher, W> {
+    matcher: M,
     standard: &'s mut Standard<W>,
     // replacer: Replacer<M>,
     // interpolator: hyperlink::Interpolator,
+    /// 其实是为了兼容类Unix系统和Windows系统不同的路径格式，所以 ripgrep 封装了一层实现两种路径格式可以根据实际的系统环境进行转换
+    /// 但是这里只是想简单展示 ripgrep 核心流程所以不需要
     // path: Option<PrinterPath<'p>>,
+    path: &'p Path,
     // start_time: Instant,
-    // match_count: u64,
+    ///匹配的行计数
+    match_count: u64,
     // after_context_remaining: u64,
     // binary_byte_offset: Option<u64>,
     // stats: Option<Stats>,
     // needs_match_granularity: bool,
 }
 
-// impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
-impl<'s, W: WriteColor> StandardSink<'s, W> {
+impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
+    /// 是否有匹配的行
+    pub fn has_match(&self) -> bool {
+        self.match_count > 0
+    }
+
+}
+
+// impl<'p, 's, M: Matcher, W: WriteColor> Sink for StandardSink<'p, 's, M, W> {
+impl<M: Matcher, W: WriteColor> Sink for StandardSink<'_, '_, M, W> {
+    /// 被重新命名的错误类型需要实现 SinkError
+    type Error = io::Error;
 
 }
 

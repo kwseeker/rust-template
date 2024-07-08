@@ -191,7 +191,6 @@ impl ByteSet {
 }
 
 pub trait Matcher {
-
     type Error: std::fmt::Display;
 
     #[inline]
@@ -222,6 +221,42 @@ pub trait Matcher {
         haystack: &[u8],
         at: usize,
     ) -> Result<Option<Match>, Self::Error>;
+}
+
+///
+impl<'a, M: Matcher> Matcher for &'a M {
+    type Error = M::Error;
+
+    #[inline]
+    fn is_match(&self, haystack: &[u8]) -> Result<bool, Self::Error> {
+        (*self).is_match(haystack)
+    }
+
+    #[inline]
+    fn is_match_at(
+        &self,
+        haystack: &[u8],
+        at: usize,
+    ) -> Result<bool, Self::Error> {
+        (*self).is_match_at(haystack, at)
+    }
+
+    #[inline]
+    fn shortest_match_at(
+        &self,
+        haystack: &[u8],
+        at: usize,
+    ) -> Result<Option<usize>, Self::Error> {
+        Ok((*self).find_at(haystack, at)?.map(|m| m.end))
+    }
+
+    fn find_at(
+        &self,
+        haystack: &[u8],
+        at: usize,
+    ) -> Result<Option<Match>, Self::Error> {
+        (*self).find_at(haystack, at)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

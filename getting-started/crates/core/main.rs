@@ -14,6 +14,7 @@ use crate::options::lowargs::SpecialMode;
 // 这里是通过 options 模块的 mod.rs 以及 mod.rs 中通过 mod 声明的模块，将全部代码联系起来的
 mod options;
 mod logger;
+mod search;
 
 // Rust 函数定义格式 fn function_name(parameters) -> return_type {...}
 fn main() -> ExitCode {

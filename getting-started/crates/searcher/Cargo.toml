@@ -1,7 +1,10 @@
 [package]
-name = "searcher"
+name = "grep-searcher"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bstr = "1.9.1"
+grep-matcher = {version = "0.1.0", path = "../matcher"}
+log = "0.4.22"
+encoding_rs_io = "0.1.7"
