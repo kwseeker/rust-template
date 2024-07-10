@@ -46,3 +46,15 @@ fn test_string() {
     }
     assert_eq!(38, x + y);
 }
+
+/// 带防止溢出检查的运算
+#[test]
+fn checked_add() {
+    let a = 254u8;
+    let b = 1u8;
+    let c = 2u8;
+    let sum1 = a.checked_add(b);
+    let sum2 = a.checked_add(c);
+    assert_eq!(sum1, Some(255u8));
+    assert_eq!(sum2, None);
+}

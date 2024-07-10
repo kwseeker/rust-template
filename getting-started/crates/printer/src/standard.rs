@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use termcolor::WriteColor;
 use grep_matcher::{LineTerminator, Match, Matcher};
-use grep_searcher::Sink;
+use grep_searcher::{Searcher, Sink, SinkMatch};
 use crate::color::ColorSpecs;
 use crate::counter::CounterWriter;
 use crate::util::{trim_ascii_prefix};
@@ -314,9 +314,11 @@ pub struct StandardSink<'p, 's, M: Matcher, W> {
     // start_time: Instant,
     ///匹配的行计数
     match_count: u64,
+    // 搭配最大可打印匹配行数使用，这个值记录还可以打印多少行
     // after_context_remaining: u64,
     // binary_byte_offset: Option<u64>,
     // stats: Option<Stats>,
+    // ???
     // needs_match_granularity: bool,
 }
 
@@ -326,6 +328,17 @@ impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
         self.match_count > 0
     }
 
+    /// 如果配置了 needs_match_granularity 需要记录匹配的行到 Standard matches
+    fn record_matches(
+        &mut self,
+        searcher: &Searcher,
+        bytes: &[u8],
+        range: std::ops::Range<usize>,
+    ) -> io::Result<()> {
+        self.standard.matches.clear();
+        // TODO 暂时不知道记录什么用，后面用到再回来添加
+        Ok(())
+    }
 }
 
 // impl<'p, 's, M: Matcher, W: WriteColor> Sink for StandardSink<'p, 's, M, W> {
@@ -333,6 +346,23 @@ impl<M: Matcher, W: WriteColor> Sink for StandardSink<'_, '_, M, W> {
     /// 被重新命名的错误类型需要实现 SinkError
     type Error = io::Error;
 
+    /// 将匹配的行打印到标准输出
+    fn matched(
+        &mut self,
+        searcher: &Searcher,
+        mat: &SinkMatch<'_>,
+    ) -> Result<bool, Self::Error> {
+        self.match_count += 1;
+        // ripgrep 可以通过配置参数设置打印匹配的最大行数，即达到最大行数限制后，不再继续搜索后面的内容，直接退出
+        // 但是这里只展示全部搜索
+
+        // 用于配置项 needs_match_granularity
+        self.record_matches(searcher, mat.buffer(), mat.bytes_range_in_buffer())?;
+
+        // StandardImpl::from_match(searcher, self, mat).sink()?;
+        // Ok(!self.should_quit())
+        Ok(true)
+    }
 }
 
 #[cfg(test)]

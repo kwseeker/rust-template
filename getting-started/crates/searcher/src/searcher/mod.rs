@@ -1,24 +1,76 @@
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io;
+use std::{cmp, io};
 use std::path::Path;
-use grep_matcher::{LineTerminator, Matcher};
-use crate::line_buffer::{LineBuffer, LineBufferReader};
+use encoding_rs_io::DecodeReaderBytesBuilder;
+use grep_matcher::{LineTerminator, Match, Matcher};
+use crate::line_buffer::{LineBuffer, LineBufferBuilder, LineBufferReader};
 use crate::searcher::glue::ReadByLine;
 use crate::sink::{Sink, SinkError};
 
 mod glue;
+mod core;
+
+type Range = Match;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    multi_line: bool
+    /// 使用使用多行模式
+    multi_line: bool,
+    /// 为 DecodeReaderBytes 显示设置的编码模式，即默认源数据编码模式为 encoding 指定的编码模式
+    encoding: Option<Encoding>,
+    /// BOM 是字节序标记，可以用于标记字节序，也可以表示编码模式
+    bom_sniffing: bool,
+    line_terminator: LineTerminator,
+    ///
+    after_context: usize,
+    ///
+    before_context: usize,
+    /// 是否打印匹配行的行号
+    line_number: bool,
 }
 
 impl Default for Config {
     fn default() -> Config {
         Config {
             multi_line: false,
+            encoding: None,
+            bom_sniffing: true,
+            line_terminator: LineTerminator::default(),
+            after_context: 0,
+            before_context: 0,
+            line_number: true,
+        }
+    }
+}
+
+impl Config {
+    fn line_buffer(&self) -> LineBuffer {
+        let mut builder = LineBufferBuilder::new();
+        builder
+            .line_terminator(self.line_terminator.as_byte()); // ripgrep 还可以设置缓冲容量，先忽略
+        builder.build()
+    }
+
+    fn max_context(&self) -> usize {
+        cmp::max(self.before_context, self.after_context)
+    }
+}
+
+/// 相当于对 encoding_rs 中的 Encoding 进行重命名
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Encoding(&'static encoding_rs::Encoding);
+
+impl Encoding {
+    /// 根据 label 查找对应的 Encoding 实现
+    pub fn new(label: &str) -> Result<Encoding, ConfigError> {
+        let label = label.as_bytes();
+        match encoding_rs::Encoding::for_label_no_replacement(label) {
+            Some(encoding) => Ok(Encoding(encoding)),
+            None => {
+                Err(ConfigError::UnknownEncoding { label: label.to_vec() })
+            }
         }
     }
 }
@@ -40,9 +92,28 @@ impl SearcherBuilder {
     }
 
     pub fn build(&self) -> Searcher {
-        //
-        let mut decode_builder = DecodeReaderBytesBuilder::new();
+        let mut config = self.config.clone();
 
+        let mut decode_builder = DecodeReaderBytesBuilder::new();
+        decode_builder
+            // 当已知所有源数据都是某个编码格式时设置，当为了支持多种编码格式到UTF-8的转换时这个配置就不需要了
+            .encoding(self.config.encoding.as_ref().map(|e| e.0))
+            // 源数据编码格式是 UTF-8 时直传
+            .utf8_passthru(true)
+            // 是否清除 BOM 标记位，只有 utf8_passthru(true) 有效，其他情况都会清除 BOM 标记位
+            .strip_bom(self.config.bom_sniffing)
+            // 修改 BOM 嗅探优先级最高，比如 默认情况 encoding() 显示设置的编码格式优先级高于 BOM 嗅探
+            .bom_override(true)
+            // 是否开启 BOM 嗅探
+            .bom_sniffing(self.config.bom_sniffing);
+
+        Searcher {
+            config,
+            decode_builder,
+            decode_buffer: RefCell::new(vec![0; 8 * (1 << 10)]),    //TODO
+            line_buffer: RefCell::new(self.config.line_buffer()),         //TODO
+            multi_line_buffer: RefCell::new(vec![]),
+        }
     }
 }
 
@@ -81,9 +152,9 @@ pub struct Searcher {
     /// 用于构建流式读取器的 Builder，可以支持不同编码方式的文件的读取和数据编码转换，比如 UTF-16 文件转 UTF-8
     /// 该读取器根据显式指定的编码或通过 BOM 嗅探自动检测到的编码对源数据进行转码。
     /// 当不需要转码时，构建的转码器将传递底层字节，而不会产生额外的开销。
-    // decode_builder: DecodeReaderBytesBuilder,
+    decode_builder: DecodeReaderBytesBuilder,
     /// 用于转码暂存空间的缓冲区
-    // decode_buffer: RefCell<Vec<u8>>,
+    decode_buffer: RefCell<Vec<u8>>,
     /// 用于面向行搜索的行缓冲区
     /// 我们将其包装在 RefCell 中，以允许将“Searcher”借用到接收器。
     /// 我们仍然需要可变借用来执行搜索，因此我们静态地防止调用者由于借用违规而导致 RefCell 在运行时出现panic。
@@ -144,7 +215,8 @@ impl Searcher {
         self.config.multi_line
     }
 
-    ///
+    /// 即从 io::Read 实现类读取数据并匹配输出
+    /// 前两步为 read_from 分别拓展了编码转换、缓冲读的功能
     pub fn search_reader<M, R, S>(
         &mut self,
         matcher: M,
@@ -156,10 +228,18 @@ impl Searcher {
         R: io::Read,
         S: Sink,
     {
-        //创建 LineBufferReader 用于将文件内容读取到缓冲, ripgrep 这里还拓展了 read_from 用于支持对多种编码格式文件的读，不过这里暂不需要先忽略
-        let mut line_buffer = self.line_buffer.borrow_mut();
-        let rdr = LineBufferReader::new(read_from, &mut *line_buffer);
+        // 1 创建编码转换器
+        let mut decode_buffer = self.decode_buffer.borrow_mut();
+        let decoder = self.decode_builder
+            .build_with_buffer(read_from, &mut *decode_buffer)
+            .map_err(S::Error::error_io)?;
 
+        // 2 创建 LineBufferReader 用于将文件内容读取到缓冲
+        let mut line_buffer = self.line_buffer.borrow_mut();
+        // let rdr = LineBufferReader::new(read_from, &mut *line_buffer);
+        let rdr = LineBufferReader::new(decoder, &mut *line_buffer);
+
+        // 3
         log::trace!("generic reader: searching via roll buffer strategy");
         ReadByLine::new(self, matcher, rdr, write_to).run()
     }

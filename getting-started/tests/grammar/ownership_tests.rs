@@ -13,6 +13,9 @@
 //  引用规则：
 //  • 在任意给定时间，要么只能有一个可变引用（一个作用域同时只能有一个可变引用），要么 只能有多个不可变引用。
 //  • 引用必须总是有效的。
+// 方法参数 &self 与 self：
+//  &self 类型方法可以接收 拥有实例、实例的引用 的调用，拥有实例其实是被隐式地转成了实例的引用
+//  self 类型方法只接收 拥有实例 的调用
 
 #[test]
 fn test_move() {
@@ -60,4 +63,43 @@ fn test_mut_ref() {
     println!("After calling closure: {list:?}");
 }
 
-//TODO Copy trait & Drop trait
+#[test]
+fn test_deref() {
+    // len() 是 String的方法，s是String的不可变引用，这里为何不需要解引用
+    fn calculate_length(s: &String) -> usize {
+        // (*s).len()   // 先解引用再调用也是可以的
+        s.len()
+    }
+
+    let str = String::from("abc");
+    let len = calculate_length(&str);
+    println!("len: {len}")
+}
+
+/// &self 类型方法可以接收 拥有实例、实例的引用 的调用，拥有实例其实是被隐式地转成了实例的引用
+/// self 类型方法只接收 拥有实例 的调用
+#[test]
+fn self_ref() {
+    struct Rectangle {
+        width: u32,
+        height: u32,
+    }
+    impl Rectangle {
+        fn area(&self) -> u32 {         //支持通过引用调用这个方法
+            self.width * self.height
+        }
+
+        fn area2(self) -> u32 {
+            self.width * self.height
+        }
+    }
+
+    let rect1 = Rectangle {     //rect1是拥有（owning）实例
+        width: 30,
+        height: 50,
+    };
+    let rect2 = &rect1; //rect2是rect1的引用
+    println!("The area of the rectangle is {} square pixels.", rect1.area());    //rect1既可以调用 area(&self) （内部将rect1隐式转换为了&rect1） 也可以调用 area2(self)
+    println!("The area of the rectangle is {} square pixels.", rect1.area2());
+    // println!("The area of the rectangle is {} square pixels.", rect2.area2());   //不能通过引用调用 area2(self)
+}

@@ -43,6 +43,19 @@ impl Match {
         assert!(self.start <= end, "{} is not <= {}", self.start, end);
         Match { end, ..*self }
     }
+
+    #[inline]
+    pub fn zero(offset: usize) -> Match {
+        Match {start: offset, end: offset}
+    }
+
+    #[inline]
+    pub fn offset(&self, amount: usize) -> Match {
+        Match {
+            start: self.start.checked_add(amount).unwrap(), //checked_add 会检查是否溢出，溢出时返回 None
+            end: self.end.checked_add(amount).unwrap(),
+        }
+    }
 }
 
 /// 为了使用 container[index] 这个容器的语法糖， container 需要实现 std::ops::Index 特征
@@ -190,9 +203,18 @@ impl ByteSet {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum LineMatchKind {
+    ///
+    Confirmed(usize),
+    ///
+    Candidate(usize),
+}
+
 pub trait Matcher {
     type Error: std::fmt::Display;
 
+    /// 查找字节数组 haystack 中是否有匹配的字符串，只要匹配到一项就立即返回
     #[inline]
     fn is_match(&self, haystack: &[u8]) -> Result<bool, Self::Error> {
         self.is_match_at(haystack, 0)
@@ -207,6 +229,20 @@ pub trait Matcher {
         Ok(self.shortest_match_at(haystack, at)?.is_some())
     }
 
+    /// 查找字节数组 haystack 中第一个匹配的字符串，返回第一个匹配的字符串在 haystack 中的范围的 end （封装到 Confirmed）
+    fn find_candidate_line(&self, haystack: &[u8]) -> Result<Option<LineMatchKind>, Self::Error> {
+        Ok(self.shortest_match(haystack)?.map(LineMatchKind::Confirmed))
+    }
+
+    #[inline]
+    fn shortest_match(
+        &self,
+        haystack: &[u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        self.shortest_match_at(haystack, 0)
+    }
+
+    /// 查找字节数组 haystack[at..] 中第一个匹配的字符串，返回第一个匹配的字符串在 haystack 中的范围的 end
     #[inline]
     fn shortest_match_at(
         &self,
@@ -216,6 +252,9 @@ pub trait Matcher {
         Ok(self.find_at(haystack, at)?.map(|m| m.end))
     }
 
+    /// 核心匹配方法，
+    /// 查找字节数组 haystack[at..] 中第一个匹配的字符串，返回第一个匹配的字符串在 haystack 中的范围
+    /// 返回值：如果没有找到匹配项，返回Ok(None), 如果发生异常返回 Err(std::fmt::Display)
     fn find_at(
         &self,
         haystack: &[u8],
@@ -223,7 +262,7 @@ pub trait Matcher {
     ) -> Result<Option<Match>, Self::Error>;
 }
 
-///
+/// 为所有实现了 Matcher 的类型重写 Matcher 下面的方法
 impl<'a, M: Matcher> Matcher for &'a M {
     type Error = M::Error;
 

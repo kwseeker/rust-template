@@ -1,4 +1,6 @@
 use std::io;
+use grep_matcher::LineTerminator;
+use crate::Searcher;
 use crate::searcher::{ConfigError};
 
 /// Sink 代表输出的意思
@@ -6,7 +8,12 @@ pub trait Sink {
     /// 将 SinkError 重命名为 Error, 然后此 Sink 内部使用 Error 实际就是使用的 SinkError
     type Error: SinkError;
 
-
+    /// 找到匹配项后调用
+    fn matched(
+        &mut self,
+        _searcher: &Searcher,
+        _mat: &SinkMatch<'_>,
+    ) -> Result<bool, Self::Error>;
 }
 
 pub trait SinkError: Sized {
@@ -37,4 +44,34 @@ impl SinkError for io::Error {
 
 impl<'a, S: Sink> Sink for &'a mut S {
     type Error = S::Error;
+
+    fn matched(&mut self, searcher: &Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
+        (**self).matched(searcher, mat)
+    }
+}
+
+/// 用于描述匹配行信息的类型
+#[derive(Clone, Debug)]
+pub struct SinkMatch<'b> {
+    pub(crate) line_term: LineTerminator,
+    /// 匹配行的字节数组
+    pub(crate) bytes: &'b [u8],
+    pub(crate) absolute_byte_offset: u64,
+    pub(crate) line_number: Option<u64>,
+    /// 读缓冲的字节数组
+    pub(crate) buffer: &'b [u8],
+    /// 行在缓冲中的范围
+    pub(crate) bytes_range_in_buffer: std::ops::Range<usize>,
+}
+
+impl<'b> SinkMatch<'b> {
+    #[inline]
+    pub fn buffer(&self) -> &'b [u8] {
+        self.buffer
+    }
+
+    #[inline]
+    pub fn bytes_range_in_buffer(&self) -> std::ops::Range<usize> {
+        self.bytes_range_in_buffer.clone()
+    }
 }
