@@ -3,13 +3,15 @@
 use std::cell::{Cell, RefCell};
 use std::{cmp, io};
 use std::io::Write;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
-use termcolor::WriteColor;
+use std::sync::Arc;
+use termcolor::{ColorSpec, WriteColor};
 use grep_matcher::{LineTerminator, Match, Matcher};
 use grep_searcher::{Searcher, Sink, SinkMatch};
 use crate::color::ColorSpecs;
 use crate::counter::CounterWriter;
-use crate::util::{trim_ascii_prefix};
+use crate::util::{DecimalFormatter, Sunk, trim_ascii_prefix};
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -21,6 +23,14 @@ struct Config {
     max_columns: Option<u64>,
     /// 打印匹配数据时是否带上文件路径信息，默认带上
     path: bool,
+    /// 是否将匹配行所属文件路径作为标题打印，默认true, 否则会作为每一个匹配行的前缀每次打印匹配行的时候都打印一次
+    heading: bool,
+    /// 文件路径终止符，比如打印匹配行所属文件路径的时候后面带上冒号
+    path_terminator: Option<u8>,
+    /// 是否打印匹配字符串首字节在匹配行中的列号
+    column: bool,
+    /// 字段分隔符，打印匹配行时，输出内容可能包括文件路径、行号、列号、行内容，需要使用字符分隔符分隔这些部分
+    separator_field_match: Arc<Vec<u8>>,
 }
 
 impl Default for Config {
@@ -30,6 +40,10 @@ impl Default for Config {
             trim_ascii: false,
             max_columns: None,
             path: true,
+            heading: true,
+            path_terminator: None,
+            column: false,
+            separator_field_match: Arc::new(b":".to_vec()), // b":" 表示字符串字面量":"的字节数组
         }
     }
 }
@@ -120,24 +134,140 @@ impl<W: WriteColor> Standard<W> {
 ///
 #[derive(Debug)]
 struct StandardImpl<'a, M: Matcher, W> {
-    // searcher: &'a Searcher,
+    searcher: &'a Searcher,
     sink: &'a StandardSink<'a, 'a, M, W>,
-    // sunk: Sunk<'a>,
+    sunk: Sunk<'a>,
     /// 是否已经为匹配的字段设置好颜色显示，当输出无颜色的字符串前清除（false），当输出有颜色的字符串前设置（true）
     in_color_match: Cell<bool>,
 }
 
 impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
     fn new(
-        // searcher: &'a Searcher,
+        searcher: &'a Searcher,
         sink: &'a StandardSink<'_, '_, M, W>,
     ) -> StandardImpl<'a, M, W> {
         StandardImpl {
-            // searcher,
+            searcher,
             sink,
-            // sunk: Sunk::empty(),
+            sunk: Sunk::empty(),
             in_color_match: Cell::new(false),
         }
+    }
+
+    fn from_match(
+        searcher: &'a Searcher,
+        sink: &'a StandardSink<'_, '_, M, W>,
+        mat: &'a SinkMatch<'a>,
+    ) -> StandardImpl<'a, M, W> {
+        let sunk = Sunk::from_sink_match(
+            mat,
+            &sink.standard.matches,
+            // sink.replacer.replacement(),
+        );
+        StandardImpl { sunk, ..StandardImpl::new(searcher, sink) }  //这里 .. 是解构并赋值
+    }
+
+    fn sink(&self) -> io::Result<()> {
+        //打印匹配行前处理
+        self.write_search_prelude()?;
+        //打印匹配行
+        if self.sunk.matches().is_empty() {
+            self.sink_fast()
+        } else {
+            self.sink_slow()
+        }
+    }
+
+    fn sink_fast(&self) -> io::Result<()> {
+        //TODO
+        Ok(())
+    }
+
+    fn sink_slow(&self) -> io::Result<()> {
+        // 打印匹配行前的前置处理
+        self.write_prelude(
+            self.sunk.absolute_byte_offset(),
+            self.sunk.line_number(),
+            Some(self.sunk.matches()[0].start() as u64 + 1),
+        )?;
+        // 颜色高亮打印，终于和之前的代码衔接上了
+        self.write_colored_line(self.sunk.matches(), self.sunk.bytes())?;
+        Ok(())
+    }
+
+    fn write_prelude(
+        &self,
+        absolute_byte_offset: u64,
+        line_number: Option<u64>,
+        column: Option<u64>,
+    ) -> io::Result<()> {
+        let mut prelude = PreludeWriter::new(self);
+        // prelude.start(line_number, column)?;
+        prelude.start()?;
+        // 1 前面也有调用打印路径的方法，区别是前面调用的方法将路径作为标题的方式打印，
+        // 这里的方法则是将路径作为匹配行的前缀，即每个匹配行都会打印一次路径信息
+        prelude.write_path()?;
+        // 2 打印行号
+        prelude.write_line_number(line_number)?;
+        // 3 打印列号，匹配字符串在匹配行中开始的列
+        prelude.write_column_number(column)?;
+        // 4 ripgrep  还支持打印绝对偏移量，但是不重要，忽略
+        // prelude.write_byte_offset(absolute_byte_offset)?;
+        prelude.end()
+    }
+
+    /// prelude 是前奏的意思，这里意为打印匹配行前的工作
+    /// 包括：打印所属文件路径；如果之前有输出过匹配行还需要换个行
+    fn write_search_prelude(&self) -> io::Result<()> {
+        let this_search_written = self.wtr().borrow().count() > 0;
+        if this_search_written {    //上次写还未完成（完成后count会重置）TODO
+            return Ok(());
+        }
+
+        // 之前是否有写过，是的话就写个行终止符，比如换个行
+        let ever_written = self.wtr().borrow().total_count() > 0;
+        if ever_written {
+            self.write_line_term()?;
+        }
+        // 以标题的方式打印匹配行所属文件路径
+        if self.config().heading {
+            self.write_path_line()?;
+        }
+        Ok(())
+    }
+
+    /// 打印文件路径带路径终止符
+    fn write_path_line(&self) -> io::Result<()> {
+        self.write_path(self.path())?;
+        if let Some(term) = self.config().path_terminator {
+            self.write(&[term])?;
+        } else {
+            self.write_line_term()?;
+        }
+        Ok(())
+    }
+
+    fn write_path(&self, path: &Path) -> io::Result<()> {
+        let mut wtr = self.wtr().borrow_mut();
+        wtr.set_color(self.config().colors.path())?;
+        wtr.write_all(path.as_os_str().as_bytes())?;
+        wtr.reset()
+    }
+
+    fn path(&self) -> &'a Path {
+        self.sink.path
+    }
+
+    fn write_spec(&self, spec: &ColorSpec, buf: &[u8]) -> io::Result<()> {
+        let mut wtr = self.wtr().borrow_mut();
+        wtr.set_color(spec)?;
+        wtr.write_all(buf)?;
+        wtr.reset()?;
+        Ok(())
+    }
+
+    fn separator_field(&self) -> &[u8] {
+        &self.config().separator_field_match
     }
 
     /// 根据配置决定是否使用颜色高亮输出匹配的行
@@ -300,6 +430,120 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
     }
 }
 
+/// 打印匹配行前的前奏Writer
+struct PreludeWriter<'a, M: Matcher, W> {
+    /// 所属 StandardImpl
+    std: &'a StandardImpl<'a, M, W>,
+    /// 下一个实际使用的字段分隔符，前一个字段打印完毕后设置
+    next_separator: PreludeSeparator,
+    /// 预设的字段分隔符
+    field_separator: &'a [u8],
+}
+
+enum PreludeSeparator {
+    None,
+    /// 其实就是列分割符，打印的时候分隔一行打印数据（包括路径（可能不存在）、行号、匹配行的内容）
+    FieldSeparator,
+    /// 专门用于分割路径和后面数据（一般是行号）的列分隔符
+    PathTerminator,
+}
+
+impl<'a, M: Matcher, W: WriteColor> PreludeWriter<'a, M, W> {
+    #[inline(always)]
+    fn new(std: &'a StandardImpl<'a, M, W>) -> PreludeWriter<'a, M, W> {
+        PreludeWriter {
+            std,
+            next_separator: PreludeSeparator::None,
+            field_separator: std.separator_field(),
+        }
+    }
+
+    #[inline(always)]
+    fn start(&mut self) -> io::Result<()> {
+        // ripgrep 这里额外处理了超链接，不重要忽略
+        Ok(())
+    }
+
+    /// 以匹配行前缀的方式打印文件路径
+    #[inline(always)]
+    fn write_path(&mut self) -> io::Result<()> {
+        if self.config().heading {
+            // true, 说明是选择了标题的方式打印匹配行，这里不需要执行
+            return Ok(())
+        }
+        // 下面是以匹配行前缀的方式打印文件路径的实现
+        let path= self.std.path();
+        // 1 先打印分隔符
+        self.write_separator()?;
+        // 2 打印文件路径
+        self.std.write_path(path)?;
+        // 3 设置下一个分隔符类型，作为文件路径和匹配行之间的分隔符，如果有配置单独的路径分隔符则设置 PathTerminator，否则使用 FieldSeparator
+        self.next_separator = if self.config().path_terminator.is_some() {
+            PreludeSeparator::PathTerminator
+        } else {
+            PreludeSeparator::FieldSeparator
+        };
+        Ok(())
+    }
+
+    /// 打印匹配行在文件中的行号
+    #[inline(always)]
+    fn write_line_number(&mut self, line: Option<u64>) -> io::Result<()> {
+        let Some(line_number) = line else { return Ok(()) };
+        self.write_separator()?;
+        // 十进制数转 u8 数组
+        let n = DecimalFormatter::new(line_number);
+        // 颜色高亮打印行号
+        self.std.write_spec(self.config().colors.line(), n.as_bytes())?;
+        self.next_separator = PreludeSeparator::FieldSeparator;
+        Ok(())
+    }
+
+    /// 打印列号，匹配字符串首字符在匹配行中的列号
+    #[inline(always)]
+    fn write_column_number(&mut self, column: Option<u64>) -> io::Result<()> {
+        if !self.config().column {
+            return Ok(());
+        }
+        let Some(column_number) = column else { return Ok(()) };
+        self.write_separator()?;
+        let n = DecimalFormatter::new(column_number);
+        self.std.write_spec(self.config().colors.column(), n.as_bytes())?;
+        self.next_separator = PreludeSeparator::FieldSeparator;
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn end(&mut self) -> io::Result<()> {
+        self.write_separator()
+    }
+
+    /// 打印分隔符，PreludeWriter 行首不会打印任何东西，后面会根据前面打印的内容和配置设置选择打印字段分割符或路径分隔符
+    fn write_separator(&mut self) -> io::Result<()> {
+        match self.next_separator {
+            PreludeSeparator::None => {}
+            PreludeSeparator::FieldSeparator => {
+                self.std.write(self.field_separator)?;
+            }
+            PreludeSeparator::PathTerminator => {
+                if let Some(term) = self.config().path_terminator {
+                    self.std.write(&[term])?;
+                }
+            }
+        }
+        //重置下确保 next_separator 设置仅一次有效
+        self.next_separator = PreludeSeparator::None;
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn config(&self) -> &Config {
+        self.std.config()
+    }
+}
+
+
+
 /// 对
 #[derive(Debug)]
 pub struct StandardSink<'p, 's, M: Matcher, W> {
@@ -308,7 +552,7 @@ pub struct StandardSink<'p, 's, M: Matcher, W> {
     // replacer: Replacer<M>,
     // interpolator: hyperlink::Interpolator,
     /// 其实是为了兼容类Unix系统和Windows系统不同的路径格式，所以 ripgrep 封装了一层实现两种路径格式可以根据实际的系统环境进行转换
-    /// 但是这里只是想简单展示 ripgrep 核心流程所以不需要
+    /// 但是这里只是想简单展示 ripgrep 核心流程所以不需要，所以使用原生的路径类型
     // path: Option<PrinterPath<'p>>,
     path: &'p Path,
     // start_time: Instant,
@@ -317,6 +561,7 @@ pub struct StandardSink<'p, 's, M: Matcher, W> {
     // 搭配最大可打印匹配行数使用，这个值记录还可以打印多少行
     // after_context_remaining: u64,
     // binary_byte_offset: Option<u64>,
+    // 统计记录，可以通过配置开启，但是先略
     // stats: Option<Stats>,
     // ???
     // needs_match_granularity: bool,
@@ -353,14 +598,15 @@ impl<M: Matcher, W: WriteColor> Sink for StandardSink<'_, '_, M, W> {
         mat: &SinkMatch<'_>,
     ) -> Result<bool, Self::Error> {
         self.match_count += 1;
-        // ripgrep 可以通过配置参数设置打印匹配的最大行数，即达到最大行数限制后，不再继续搜索后面的内容，直接退出
-        // 但是这里只展示全部搜索
+        // ripgrep 可以通过配置参数设置打印匹配的最大行数，即达到最大行数限制后，不再继续搜索后面的内容，直接退出；但是这里只展示全部搜索
+        // 另外还支持通过 Replacer 进行文本替换，但是官方源码基本没有信息说明这个文本替换具体是什么用途，不过推测可能是用于搜索敏感信息并做脱敏处理等场景；暂略
 
         // 用于配置项 needs_match_granularity
         self.record_matches(searcher, mat.buffer(), mat.bytes_range_in_buffer())?;
 
-        // StandardImpl::from_match(searcher, self, mat).sink()?;
-        // Ok(!self.should_quit())
+        // 创建Printer实现类型，并打印匹配结果
+        StandardImpl::from_match(searcher, self, mat).sink()?;
+        // Ok(!self.should_quit())  //用于有最大匹配打印行数限制等场景，这里全部搜索不需要
         Ok(true)
     }
 }

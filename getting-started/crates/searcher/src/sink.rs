@@ -60,7 +60,7 @@ pub struct SinkMatch<'b> {
     pub(crate) line_number: Option<u64>,
     /// 读缓冲的字节数组
     pub(crate) buffer: &'b [u8],
-    /// 行在缓冲中的范围
+    /// 匹配的行在缓冲中的范围
     pub(crate) bytes_range_in_buffer: std::ops::Range<usize>,
 }
 
@@ -73,5 +73,20 @@ impl<'b> SinkMatch<'b> {
     #[inline]
     pub fn bytes_range_in_buffer(&self) -> std::ops::Range<usize> {
         self.bytes_range_in_buffer.clone()
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> &'b [u8] {
+        self.bytes
+    }
+
+    #[inline]
+    pub fn absolute_byte_offset(&self) -> u64 {
+        self.absolute_byte_offset
+    }
+
+    #[inline]
+    pub fn line_number(&self) -> Option<u64> {
+        self.line_number
     }
 }

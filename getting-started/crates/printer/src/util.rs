@@ -1,7 +1,111 @@
 use std::borrow::Cow;
 use std::path::Path;
 use bstr::ByteVec;
-use grep_matcher::{LineTerminator, Match};
+use termcolor::WriteColor;
+use grep_matcher::{LineTerminator, Match, Matcher};
+use grep_searcher::SinkMatch;
+
+#[derive(Debug)]
+pub(crate) struct Sunk<'a> {
+    /// 匹配行的字节数组，ripgrep 中这个字段可能经过  Replacer 替换
+    bytes: &'a [u8],
+    /// 本次搜索缓冲相对于程序起始搜索的绝对偏移，即之前搜索过的数据字节数的累积统计
+    absolute_byte_offset: u64,
+    /// 缓冲中匹配行的数量
+    line_number: Option<u64>,
+    // context_kind: Option<&'a SinkContextKind>,
+    /// 这个字段 ripgrep 用于记录通过 Replacer 替换之后匹配行在缓冲中的范围，缓冲中可能有多个匹配行所以是个数组
+    /// 这里还保持和 original_matches 一致即可
+    matches: &'a [Match],
+    /// 原始匹配行在缓冲中的范围，缓冲中可能有多个匹配行所以是个数组
+    original_matches: &'a [Match],
+}
+
+impl<'a> Sunk<'a> {
+    #[inline]
+    pub(crate) fn empty() -> Sunk<'static> {
+        Sunk {
+            bytes: &[],
+            absolute_byte_offset: 0,
+            line_number: None,
+            // context_kind: None,
+            matches: &[],
+            original_matches: &[],
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_sink_match(
+        sunk: &'a SinkMatch<'a>,
+        original_matches: &'a [Match],
+        // replacement: Option<(&'a [u8], &'a [Match])>,
+    ) -> Sunk<'a> {
+        // let (bytes, matches) =
+        //     replacement.unwrap_or_else(|| (sunk.bytes(), original_matches));
+        Sunk {
+            bytes: sunk.bytes(),
+            absolute_byte_offset: sunk.absolute_byte_offset(),
+            line_number: sunk.line_number(),
+            // context_kind: None,
+            matches: original_matches,
+            original_matches,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn bytes(&self) -> &'a [u8] {
+        self.bytes
+    }
+
+    #[inline]
+    pub(crate) fn matches(&self) -> &'a [Match] {
+        self.matches
+    }
+
+    #[inline]
+    pub(crate) fn absolute_byte_offset(&self) -> u64 {
+        self.absolute_byte_offset
+    }
+
+    #[inline]
+    pub(crate) fn line_number(&self) -> Option<u64> {
+        self.line_number
+    }
+}
+
+/// 十进制数格式化器
+#[derive(Debug)]
+pub(crate) struct DecimalFormatter {
+    /// 十进制数按位提取数字字符， 比如 12 -> ['0', .., '1', '2']
+    buf: [u8; Self::MAX_U64_LEN],
+    /// 指向最高有效位在数组的中索引, 比如 12 转换后 start = 18
+    start: usize,
+}
+
+impl DecimalFormatter {
+    /// Discovered via `u64::MAX.to_string().len()`.
+    const MAX_U64_LEN: usize = 20;  //u64数字的位数最大为20
+
+    pub(crate) fn new(mut n: u64) -> DecimalFormatter {
+        let mut buf = [0; Self::MAX_U64_LEN];
+        let mut i = buf.len();
+        loop {
+            i -= 1;
+
+            let digit = u8::try_from(n % 10).unwrap();
+            n /= 10;
+            buf[i] = b'0' + digit;
+            if n == 0 {
+                break;
+            }
+        }
+        DecimalFormatter { buf, start: i }
+    }
+
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        &self.buf[self.start..]
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct PrinterPath<'a> {
