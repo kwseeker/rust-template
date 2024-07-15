@@ -11,7 +11,7 @@ use grep_matcher::{LineTerminator, Match, Matcher};
 use grep_searcher::{Searcher, Sink, SinkMatch};
 use crate::color::ColorSpecs;
 use crate::counter::CounterWriter;
-use crate::util::{DecimalFormatter, find_iter_at_in_context, Sunk, trim_ascii_prefix};
+use crate::util::{DecimalFormatter, find_iter_at_in_context, Sunk, trim_ascii_prefix, trim_line_terminator};
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -345,12 +345,13 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
     /// 匹配的行的输出是一部分一部分写的，因为termcolor对颜色的控制无法做到精细控制，
     /// 只能写完非高亮部分，然后设置颜色再写颜色高亮部分，写完高亮部分再重置颜色配置再写非高亮部分，这样交替
     fn write_colored_matches(&self,
-                             bytes: &[u8],          //推测是匹配的字符串，里面可能包含多行文本
-                             mut line: Match,       //匹配的行的range范围
-                             matches: &[Match],     //bytes中匹配的切片的range范围，可能有多个
+                             bytes: &[u8],          //匹配行的字节数组
+                             mut line: Match,       //匹配行的range范围
+                             matches: &[Match],     //匹配行中匹配字符串的range范围，可能有多个
                              match_index: &mut usize,   //matches 的索引，初始为 0 (即 *match_index == 0)
     ) -> io::Result<()> {
-        //裁剪匹配行中的行终止符，TODO
+        //删除匹配行中的行终止符，因为输出匹配行后会统一打印行终止符
+        self.trim_line_terminator(bytes, &mut line);
 
         if matches.is_empty() {     //行整体匹配但是里面没有匹配的切片
             self.write(&bytes[line])?;  // container[index] 实际上是容器的语法糖， container 需要实现 std::ops::Index 特征
@@ -388,10 +389,14 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
         Ok(())
     }
 
+    // 清除行尾的行终止符
+    fn trim_line_terminator(&self, buf: &[u8], line: &mut Match) {
+        trim_line_terminator(&self.searcher, buf, line);
+    }
+
     fn write_line_term(&self) -> io::Result<()> {
-        // TODO
-        // self.write(self.searcher.line_terminator().as_bytes())
-        self.write(LineTerminator::default().as_bytes())
+        // self.write(LineTerminator::default().as_bytes())
+        self.write(self.searcher.line_terminator().as_bytes())
     }
 
     /// 将数据写入 io::Write 即输出
