@@ -135,6 +135,8 @@ impl LineBuffer {
             //确保行缓冲剩余空间足够容纳新读取的数据，不够就额外分配一些空间，Vec不是变长的么？会自动拓展为何还需要手动分配？
             //主要是因为下一行 io::Read 读操作只会按Vec实际分配的空间读
             self.ensure_capacity()?;
+            //将文件内容读取到缓冲空闲的切片，返回实际读取的字节数量
+            //注意 DecodeReaderBytes read() 方法第一次读取会尝试读取文件的 BOM 部分（3字节）
             let read_len = rdr.read(self.free_buffer().as_bytes_mut())?;    //数据读完或buffer读满为止，返回实际读取的长度（按元素个数算）
             if read_len == 0 {  //说明文件读取完毕
                 self.last_line_terminator = self.end;   //将行终止符位置设置为最后一个字符的位置，这样即使没有行终止符也可以被消费了
@@ -144,7 +146,7 @@ impl LineBuffer {
             let old_end = self.end;
             self.end += read_len;
             let newbytes = &mut self.buf[old_end..self.end];
-            if let Some(i) = newbytes.rfind_byte(self.config.line_terminator) {    //寻找最后一个行终止符
+            if let Some(i) = newbytes.rfind_byte(self.config.line_terminator) {    //寻找最后一个行终止符在 newbytes 中的索引
                 self.last_line_terminator = old_end + i + 1;
                 return Ok(true);
             }

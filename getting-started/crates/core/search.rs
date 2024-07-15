@@ -1,9 +1,44 @@
 use std::io;
 use std::path::Path;
 use {grep::matcher::Matcher, termcolor::WriteColor};
+use grep::searcher::Searcher;
 
 #[derive(Clone, Debug, Default)]
 struct Config {}
+
+#[derive(Clone, Debug)]
+struct SearchWorkerBuilder {
+    config: Config,
+}
+
+impl Default for SearchWorkerBuilder {
+    fn default() -> SearchWorkerBuilder {
+        SearchWorkerBuilder::new()
+    }
+}
+
+impl SearchWorkerBuilder {
+    pub(crate) fn new() -> SearchWorkerBuilder {
+        SearchWorkerBuilder {
+            config: Config::default(),
+        }
+    }
+
+    pub(crate) fn build<W: WriteColor>(
+        &self,
+        searcher: Searcher,
+        matcher: PatternMatcher,
+        printer: Printer<W>,
+    ) -> SearchWorker<W> {
+        let config = self.config.clone();
+        SearchWorker {
+            config,
+            searcher,
+            matcher,
+            printer,
+        }
+    }
+}
 
 /// 核心类
 /// 执行搜索的 Worker，内部分别利用 LineBuffer、RegexMatcher、StandardImpl 实现文本读取、匹配、以及输出
@@ -28,7 +63,6 @@ pub(crate) struct SearchWorker<W> {
 }
 
 impl<W: WriteColor> SearchWorker<W> {
-
     /// 核心方法
     pub(crate) fn search(
         &mut self,
@@ -92,9 +126,9 @@ fn search_path<M: Matcher, W: WriteColor>(
         Printer::Standard(ref mut standard) => {
             let mut sink = standard.sink_with_path(&matcher, path);
             searcher.search_path(&matcher, path, &mut sink)?;     //TODO 为何这里 &sink 不可变引用会报编译错误： the trait `grep::grep_searcher::Sink` is not implemented for `&printer::standard::StandardSink<'_, '_, &M, W>`
-                                                                //官方推荐要么传值、要么使用可变引用；
+            //官方推荐要么传值、要么使用可变引用；
             Ok(SearchResult {
-                has_match: sink.has_match(),    //TODO
+                has_match: sink.has_match(),    //是否有搜索到匹配行
             })
         }
     }
@@ -102,11 +136,35 @@ fn search_path<M: Matcher, W: WriteColor>(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+    use termcolor::ColorChoice;
+    use grep::printer::StandardBuilder;
+    use grep::regex::RegexMatcherBuilder;
+    use grep::searcher::SearcherBuilder;
+    use crate::search::{PatternMatcher, Printer, SearchWorkerBuilder};
+
     #[test]
     fn do_search() {
         // 1 构建 SearchWorker 及内部组件
-
+        //  searcher
+        let searcher = SearcherBuilder::new()
+            .build();
+        //  matcher
+        let matcher = PatternMatcher::RustRegex(RegexMatcherBuilder::new()
+            .build("grep").unwrap());
+        //  printer
+        let out = termcolor::StandardStream::stdout(ColorChoice::Auto);
+        let standard = StandardBuilder::new()
+            .max_columns(Some(4096))
+            .trim_ascii(true)
+            .build(out);
+        let printer = Printer::Standard(standard);
+        //  search_worker
+        let builder = SearchWorkerBuilder::new();
+        let mut search_worker = builder.build(searcher, matcher, printer);
         // 2 执行搜索、输出等流程
-
+        //  这里的例子是搜索根目录下 Cargo.toml 中包含 grep 的行
+        let path = Path::new("./Cargo.toml");
+        search_worker.search(path).unwrap();
     }
 }

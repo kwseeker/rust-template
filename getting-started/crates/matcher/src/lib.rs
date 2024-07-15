@@ -1,3 +1,5 @@
+use std::io;
+
 /// 指向可寻址内存的连续块的可能为空的范围。
 /// 其实就是用于表示匹配字符串范围的，这里的匹配字符串可能是行、可能是行里匹配的字符串
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -260,6 +262,28 @@ pub trait Matcher {
         haystack: &[u8],
         at: usize,
     ) -> Result<Option<Match>, Self::Error>;
+
+    /// 迭代查询 bytes[at..] 中匹配的字符串交给 matched 闭包处理
+    fn find_iter_at<F>(&self, bytes: &[u8], at: usize, mut matched: F) -> Result<(), Self::Error>
+    where
+        F: FnMut(Match) -> bool,
+    {
+        let mut last_end = at;
+        loop {
+            if last_end > bytes.len() {
+                return Ok(())
+            }
+            let m = match self.find_at(bytes, last_end)? {
+                None => return Ok(()),
+                Some(m) => m,
+            };
+            last_end = m.end;
+            match matched(m) {
+                true => continue,
+                false => return Ok(())
+            }
+        }
+    }
 }
 
 /// 为所有实现了 Matcher 的类型重写 Matcher 下面的方法

@@ -19,6 +19,32 @@
 //  fn foo<T, K, R>(a: T, b: K, c: R) where T: A, K: B+C, R: D {. . .}
 
 // ------------------------------------------------------------------
+/// Default
+#[test]
+fn derive_default() {
+    #[derive(Default, Debug)]   //成员是结构体等类型，需要成员类型也实现Default（无论是自动派生或者手动实现）
+    struct A {
+        a: i32,
+        b: Inner
+    }
+    // #[derive(Default, Debug)]
+    #[derive(Debug)]
+    struct Inner {
+        b: i32,
+    }
+    impl Default for Inner {
+        fn default() -> Self {
+            Self {
+                b: 0,
+            }
+        }
+    }
+
+    let a = A::default();
+    println!("{a:?}")
+}
+
+// ------------------------------------------------------------------
 pub trait Fly {
     fn fly(&self);
 }

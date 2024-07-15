@@ -45,7 +45,8 @@ fn run(result: ParseResult<HiArgs>) -> anyhow::Result<ExitCode> {
         ParseResult::Ok(args) => args,                          //非特殊选项解构
     };
 
-    //非特殊选项处理
+    // 非特殊选项处理
+
 
     Ok(ExitCode::SUCCESS)
 }
@@ -61,6 +62,18 @@ fn special(mode: SpecialMode) -> anyhow::Result<ExitCode> {
     writeln!(std::io::stdout(), "{}", output.trim_end())?;
     Ok(ExitCode::SUCCESS)
 }
+
+///
+// fn search(args: &HiArgs, mode: SearchMode) -> anyhow::Result<bool> {
+//     //1 创建 SearchWorker
+//     let mut searcher = args.search_worker(
+//         args.matcher()?,
+//         args.searcher()?,
+//         args.printer(mode, args.stdout()),
+//     )?;
+//
+//
+// }
 
 // 条件编译宏，这里表示只有在执行cargo test才会编译和运行tests模块
 // Rust单元测试习惯和业务代码放在一起，集成测试则放到tests文件夹

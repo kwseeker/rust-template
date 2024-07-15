@@ -243,4 +243,8 @@ impl Searcher {
         log::trace!("generic reader: searching via roll buffer strategy");
         ReadByLine::new(self, matcher, rdr, write_to).run()
     }
+
+    pub fn line_terminator(&self) -> LineTerminator {
+        self.config.line_terminator
+    }
 }

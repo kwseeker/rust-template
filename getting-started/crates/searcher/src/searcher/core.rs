@@ -1,7 +1,6 @@
 use grep_matcher::{LineMatchKind, Matcher};
 use crate::searcher::{Config, Range};
 use crate::{lines, Searcher, Sink};
-use crate::lines::LineStep;
 use crate::sink::{SinkError, SinkMatch};
 
 enum FastMatchResult {
@@ -23,13 +22,13 @@ pub(crate) struct Core<'s, M: 's, S> {
     last_line_counted: usize,
     /// 上次匹配到的行的结尾偏移位置（end）
     last_line_visited: usize,
-    /// 和 LineBufferReader 中的 pos 类似，但是是记录的可读位置，LineBufferReader中pos记录可写位置
+    /// 和 LineBufferReader 中的 pos 类似，但是是记录缓冲的可读位置，LineBufferReader中pos记录可写位置
     /// 因为从缓冲中匹配数据是一个个匹配的，所以需要记录每次匹配读取到了哪个位置
     pos: usize,
     /// 是否有匹配的行
     has_matched: bool,
-    ///
-    after_context_left: usize,
+    // 匹配之后剩余需要搜索的行数，用于有打印行数量限制时使用
+    // after_context_left: usize,
 }
 
 impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
@@ -52,7 +51,7 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
             last_line_counted: 0,
             last_line_visited: 0,
             has_matched: false,
-            after_context_left: 0,
+            // after_context_left: 0,
         };
         core
     }
@@ -108,7 +107,7 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
         buf: &[u8],
     ) -> Result<bool, S::Error> {
         match self.match_by_line_fast(buf)? {
-            //TODO
+            //TODO ripgrep SwitchToSlow
             FastMatchResult::Continue => {Ok(true)}
             FastMatchResult::Stop => {Ok(false)}
         }
@@ -139,7 +138,9 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
                 break;
             }
         }
-        //TODO
+        //ripgrep 这里还有检查搜索到匹配行数量是否达到最大限制，达到的话直接退出，返回 FastMatchResult::Stop 告诉外层循环不需要继续搜索了
+
+        self.set_pos(buf.len());
         Ok(FastMatchResult::Continue)
     }
 
@@ -155,7 +156,7 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
                 Err(err) => Err(S::Error::error_message(err)),
                 Ok(None) => Ok(None),
                 Ok(Some(LineMatchKind::Confirmed(i))) => {
-                    // Confirmed 中的值是找到的第一个匹配项的结尾在缓冲中的位置
+                    // Confirmed 中的值是找到的第一个匹配项的结尾在缓冲中的位置+1
                     // 然后需要根据这个位置，查找到完整行在buf中的范围（范围使用Match对象表示）
                     let line = lines::locate(buf, self.config.line_terminator.as_byte(), Range::zero(i).offset(self.pos));
                     if line.start() == buf.len() {  //不太可能吧
@@ -259,7 +260,11 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
                 buffer: buf,
                 bytes_range_in_buffer: range.start()..range.end(),
             })?;
+        if !keep_going {
+            return Ok(false);
+        }
 
+        self.last_line_visited = range.end();
         Ok(true)
     }
 }

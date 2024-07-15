@@ -1,9 +1,10 @@
 use std::borrow::Cow;
+use std::io;
 use std::path::Path;
 use bstr::ByteVec;
 use termcolor::WriteColor;
 use grep_matcher::{LineTerminator, Match, Matcher};
-use grep_searcher::SinkMatch;
+use grep_searcher::{Searcher, SinkError, SinkMatch};
 
 #[derive(Debug)]
 pub(crate) struct Sunk<'a> {
@@ -166,4 +167,41 @@ pub(crate) fn trim_ascii_prefix(
         })
         .count();
     range.with_start(range.start() + count)
+}
+
+/// 迭代查找 bytes[range] 中所有匹配的字符串交给闭包中的 matched 处理
+pub(crate) fn find_iter_at_in_context<M: Matcher, F: FnMut(Match) -> bool>(
+    searcher: &Searcher,
+    matcher: M,
+    mut bytes: &[u8],   //缓冲
+    range: std::ops::Range<usize>,  //匹配行在缓冲中的范围
+    mut matched: F,
+) -> io::Result<()> {
+    let mut m = Match::new(0, range.end);
+    trim_line_terminator(searcher, bytes, &mut m);
+    bytes = &bytes[..m.end()];
+    matcher
+        .find_iter_at(bytes, range.start, |m| {
+            if m.start() >= range.end {
+                return false;
+            }
+            matched(m)
+        })
+        .map_err(io::Error::error_message)
+}
+
+/// 清除行中的行终止符，从前面的逻辑看如果行中有行终止符，只可能在最后面，所以这里只需要判断最后一位是否是行终止符
+pub(crate) fn trim_line_terminator(
+    searcher: &Searcher,
+    buf: &[u8],
+    line: &mut Match,
+) {
+    let line_terminator = searcher.line_terminator();
+    if line_terminator.is_suffix(&buf[*line]) {
+        let mut end = line.end() - 1;
+        if line_terminator.is_crlf() && end > 0 && buf.get(end - 1) == Some(&b'\r') {
+            end -= 1;
+        }
+        *line = line.with_end(end);
+    }
 }

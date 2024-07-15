@@ -1,5 +1,8 @@
 use std::cell::RefCell;
-use std::io::Read;
+use std::fs::File;
+use std::io;
+use std::io::{BufReader, Read, Seek};
+use std::path::Path;
 use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 
 #[test]
@@ -108,7 +111,7 @@ fn test_strip_bom() {
 
 #[test]
 fn test_read() {
-    let source_data = &b"\xEF\xBB\xBFfoo\xFFbar"[..];
+    let source_data = &b"\xEF\xBB\xBFfoo\xFFbar,moredata:123456"[..];
     let mut decoder = DecodeReaderBytesBuilder::new()
         .utf8_passthru(true)
         .strip_bom(false)
@@ -119,10 +122,14 @@ fn test_read() {
     decoder.read(&mut bytes).unwrap();
     assert_eq!(&bytes[0..3], b"\xEF\xBB\xBF");
 
-    // read() 第二次会读取剩余部分
+    // read() 第二次会读取剩余部分, 如果缓冲空间不足容纳全部数据就能读多少读多少
+    let mut bytes: [u8; 8] = [0; 8];
+    decoder.read(&mut bytes).unwrap();
+    assert_eq!(&bytes, b"foo\xFFbar,");
+
     let mut bytes: [u8; 32] = [0; 32];
     decoder.read(&mut bytes).unwrap();
-    assert_eq!(&bytes[0..7], b"foo\xFFbar");
+    assert_eq!(&bytes[0..15], b"moredata:123456");
 }
 
 /// 查看汉字的 UTF-8 编码
@@ -131,4 +138,57 @@ fn chinese_utf8() {
     let bytes = "中国".as_bytes();
     println!("data utf8: {:?}", bytes.iter().map(|&b|
     format!("{:08b}", b).to_string()).collect::<Vec<String>>().join(" "));   //11100100 10111000 10101101 11100101 10011011 10111101
+}
+
+///
+#[test]
+fn read_file() {
+    let file = File::open("Cargo.toml").unwrap();
+    // let buf_reader = BufReader::new(file);
+    // let mut decoder = DecodeReaderBytesBuilder::new()
+    //     .utf8_passthru(true)
+    //     .strip_bom(false)
+    //     .build(buf_reader);
+    let mut decoder = DecodeReaderBytes::new(file);
+    // read() 读取文件，保证bytes足够容纳文件内容，还是分两次读取，第一次读取3个字节（但是并不是文件的BOM）???
+    let mut bytes: [u8; 1024] = [0; 1024];
+    let mut read_len1 = decoder.read(&mut bytes).unwrap();
+    let mut read_len2 = decoder.read(&mut bytes[read_len1..]).unwrap();
+    println!("{}", String::from_utf8_lossy(&bytes[0..read_len2]));
+}
+
+#[test]
+fn read_file2() {
+    let file = File::open("Cargo.toml").unwrap();
+    let mut buf_reader = BufReader::new(file);
+
+    // 读取文件的前3个字节来检查BOM
+    let mut bom = [0; 3];
+    let bom_length = buf_reader.read(&mut bom).unwrap();
+
+    // 回到文件开始位置
+    buf_reader.seek(io::SeekFrom::Start(0)).unwrap();
+
+    // 检查BOM并获取相应的编码
+    let encoding = match &bom[..bom_length] {
+        b"\xEF\xBB\xBF" => Some(encoding_rs::UTF_8),
+        b"\xFE\xFF" => Some(encoding_rs::UTF_16BE),
+        b"\xFF\xFE" => Some(encoding_rs::UTF_16LE),
+        _ => None,
+    };
+
+    // 打印BOM信息
+    if let Some(enc) = encoding {
+        println!("Detected BOM for encoding: {}", enc.name());
+    } else {
+        println!("No BOM detected, assuming default encoding.");
+    }
+
+    // 使用 DecodeReaderBytes 来解码文件内容
+    let mut decoder = DecodeReaderBytes::new(buf_reader);
+    let mut decoded_string = String::new();
+    decoder.read_to_string(&mut decoded_string).unwrap();
+
+    // 打印解码后的内容
+    println!("{}", decoded_string);
 }

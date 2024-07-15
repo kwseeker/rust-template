@@ -140,7 +140,7 @@ impl Matcher for RegexMatcher {
     }
 
     /// 在 haystack [at, haystack.len) 范围内执行最左边的搜索并返回找到的第一个匹配项（如果存在）
-    /// 返回匹配字符串的 Match 区间， 参考下面单元测试
+    /// 返回匹配字符串的 Match 区间的右边界，参考下面单元测试
     #[inline]
     fn find_at(
         &self,

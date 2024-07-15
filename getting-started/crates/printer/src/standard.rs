@@ -11,7 +11,7 @@ use grep_matcher::{LineTerminator, Match, Matcher};
 use grep_searcher::{Searcher, Sink, SinkMatch};
 use crate::color::ColorSpecs;
 use crate::counter::CounterWriter;
-use crate::util::{DecimalFormatter, Sunk, trim_ascii_prefix};
+use crate::util::{DecimalFormatter, find_iter_at_in_context, Sunk, trim_ascii_prefix};
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -127,6 +127,7 @@ impl<W: WriteColor> Standard<W> {
             standard: self,
             path,
             match_count: 0,
+            needs_match_granularity: true,
         }
     }
 }
@@ -168,7 +169,7 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
     }
 
     fn sink(&self) -> io::Result<()> {
-        //打印匹配行前处理
+        //打印匹配行前处理（用于配置以标题的形式打印文件路径）
         self.write_search_prelude()?;
         //打印匹配行
         if self.sunk.matches().is_empty() {
@@ -220,7 +221,7 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
     /// 包括：打印所属文件路径；如果之前有输出过匹配行还需要换个行
     fn write_search_prelude(&self) -> io::Result<()> {
         let this_search_written = self.wtr().borrow().count() > 0;
-        if this_search_written {    //上次写还未完成（完成后count会重置）TODO
+        if this_search_written {    //这个文件所有匹配行还未输出完成（完成后count会重置）
             return Ok(());
         }
 
@@ -542,8 +543,6 @@ impl<'a, M: Matcher, W: WriteColor> PreludeWriter<'a, M, W> {
     }
 }
 
-
-
 /// 对
 #[derive(Debug)]
 pub struct StandardSink<'p, 's, M: Matcher, W> {
@@ -563,8 +562,8 @@ pub struct StandardSink<'p, 's, M: Matcher, W> {
     // binary_byte_offset: Option<u64>,
     // 统计记录，可以通过配置开启，但是先略
     // stats: Option<Stats>,
-    // ???
-    // needs_match_granularity: bool,
+    /// 看 ripgrep 实现逻辑推测这个参数控制是否高亮展示匹配行中所有匹配字段
+    needs_match_granularity: bool,
 }
 
 impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
@@ -573,15 +572,23 @@ impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
         self.match_count > 0
     }
 
-    /// 如果配置了 needs_match_granularity 需要记录匹配的行到 Standard matches
+    /// 如果配置了 needs_match_granularity 需要找出匹配行中所有匹配字符串相对于行首的 Range 记录到 Standard matches
     fn record_matches(
         &mut self,
         searcher: &Searcher,
         bytes: &[u8],
-        range: std::ops::Range<usize>,
+        range: std::ops::Range<usize>,  //匹配行在缓冲中的范围
     ) -> io::Result<()> {
+        if !self.needs_match_granularity {
+            return Ok(())
+        }
         self.standard.matches.clear();
-        // TODO 暂时不知道记录什么用，后面用到再回来添加
+        let matches = &mut self.standard.matches;
+        find_iter_at_in_context(searcher, &self.matcher, bytes, range.clone(), |m| {
+            let (s, e) = (m.start() - range.start, m.end() - range.start);
+            matches.push(Match::new(s, e));
+            true
+        })?;
         Ok(())
     }
 }
@@ -601,7 +608,8 @@ impl<M: Matcher, W: WriteColor> Sink for StandardSink<'_, '_, M, W> {
         // ripgrep 可以通过配置参数设置打印匹配的最大行数，即达到最大行数限制后，不再继续搜索后面的内容，直接退出；但是这里只展示全部搜索
         // 另外还支持通过 Replacer 进行文本替换，但是官方源码基本没有信息说明这个文本替换具体是什么用途，不过推测可能是用于搜索敏感信息并做脱敏处理等场景；暂略
 
-        // 用于配置项 needs_match_granularity
+        // 前面的逻辑是查到一个匹配行，但是只是知道这行里面有匹配的字符串并不知道实际有几个匹配的字符串，这里需要找出行里所有匹配字符串
+        // 因为后面需要颜色高亮打印所有匹配字符串
         self.record_matches(searcher, mat.buffer(), mat.bytes_range_in_buffer())?;
 
         // 创建Printer实现类型，并打印匹配结果

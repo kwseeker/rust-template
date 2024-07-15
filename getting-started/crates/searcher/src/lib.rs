@@ -1,8 +1,8 @@
 pub use crate::searcher::{
-    Searcher
+    Searcher, SearcherBuilder
 };
 pub use crate::sink::{
-    Sink, SinkMatch
+    Sink, SinkMatch, SinkError
 };
 
 mod line_buffer;

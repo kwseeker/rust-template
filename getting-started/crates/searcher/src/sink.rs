@@ -8,7 +8,7 @@ pub trait Sink {
     /// 将 SinkError 重命名为 Error, 然后此 Sink 内部使用 Error 实际就是使用的 SinkError
     type Error: SinkError;
 
-    /// 找到匹配项后调用
+    /// 找到匹配项后调用，其实是执行打印输出
     fn matched(
         &mut self,
         _searcher: &Searcher,

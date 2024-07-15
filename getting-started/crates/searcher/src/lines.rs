@@ -59,7 +59,7 @@ pub(crate) fn count(bytes: &[u8], line_term: u8) -> u64 {
 pub(crate) fn locate(bytes: &[u8], line_term: u8, range: Match) -> Match {
     let line_start = bytes[..range.start()].rfind_byte(line_term)
         .map_or(0, |i| i + 1);
-    let line_end = bytes[range.end()..].rfind_byte(line_term)
+    let line_end = bytes[range.end()..].find_byte(line_term)
         .map_or(bytes.len(), |i| range.end() + i + 1);  //右边找不到行终止符使用 bytes.len 作为行结束位置
     Match::new(line_start, line_end)
 }
