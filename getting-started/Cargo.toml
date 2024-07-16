@@ -30,6 +30,7 @@ members = [
 grep = { version = "0.1.0", path = "crates/grep" }
 # 下面依赖版本默认当作开头包含“^”处理，即跳脱条件：https://rustwiki.org/zh-CN/cargo/reference/specifying-dependencies.html#/caret-requirements%E8%B7%B3%E8%84%B1%E6%9D%A1%E4%BB%B6
 anyhow = "1.0.82"
+bstr = "1.7.0"
 lexopt = "0.3.0"    # 命令行参数解析库
 log = "0.4.5"      # 按 ^0.4.5 解释，即 >=0.4.5 <0.5.0, 由于当前测试符合条件的最新版本是 0.4.21, 所以最终会引入 0.4.21
 rand = "0.9.0-alpha.1"
