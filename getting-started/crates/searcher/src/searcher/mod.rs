@@ -115,6 +115,11 @@ impl SearcherBuilder {
             multi_line_buffer: RefCell::new(vec![]),
         }
     }
+
+    pub fn line_number(&mut self, yes: bool) -> &mut SearcherBuilder {
+        self.config.line_number = yes;
+        self
+    }
 }
 
 /// Searcher 构建过程中的错误类型枚举

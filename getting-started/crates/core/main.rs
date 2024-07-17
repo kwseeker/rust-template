@@ -13,7 +13,7 @@ use grep::searcher::SearcherBuilder;
 use crate::logger::logger::Logger;
 // 得益于 options/mod.rs 的 "pub(crate) use crate::options::hiargs::HiArgs" 这里才可以写的短一些
 use crate::options::{HiArgs, ParseResult};
-use crate::options::lowargs::SpecialMode;
+use crate::options::lowargs::{Mode, SearchMode, SpecialMode};
 use crate::search::{PatternMatcher, Printer};
 
 // mod options 表示从 options.rs 或 options/mod.rs 中查找模块代码
@@ -40,7 +40,7 @@ fn main() -> ExitCode {
     //3 选项参数处理，比如执行搜索
     run(result).unwrap_or_else(|err| {
         eprintln_locked!("{:#}", err);
-        ExitCode::from(1)       //TODO
+        ExitCode::from(1)
     })
 }
 
@@ -49,7 +49,7 @@ fn main() -> ExitCode {
 /// Ok(T),                   非特殊选项
 /// Err(anyhow::Error),      解析异常
 fn run(result: ParseResult<HiArgs>) -> anyhow::Result<ExitCode> {
-    let args = match result {
+    let mut args = match result {
         ParseResult::Err(err) => return Err(err),
         ParseResult::Special(mode) => return special(mode), //特殊选项的处理, 比如查看帮助、查看版本号
         ParseResult::Ok(args) => args,                          //非特殊选项解构
@@ -61,10 +61,18 @@ fn run(result: ParseResult<HiArgs>) -> anyhow::Result<ExitCode> {
     // Types：列举配置的所有文件类型
     // Generate：生成帮助文档等
     // 这里只展示 Search
-
-
-
-    Ok(ExitCode::SUCCESS)
+    let matched = match args.mode() {
+        Mode::Search(_) if !args.matches_possible() => false,
+        Mode::Search(mode) if args.threads() == 1 => search(&mut args, mode)?,
+        Mode::Search(mode) => search_parallel(&args, mode)?,
+        Mode::Files => false   //先忽略
+    };
+    let exit_code = if matched {
+        ExitCode::from(0)
+    } else {
+        ExitCode::from(1)
+    };
+    Ok(exit_code)
 }
 
 fn special(mode: SpecialMode) -> anyhow::Result<ExitCode> {
@@ -79,35 +87,29 @@ fn special(mode: SpecialMode) -> anyhow::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+fn search(args: &mut HiArgs, mode: SearchMode) -> anyhow::Result<bool> {
+    let mut matched = false;
+    //1 创建 SearchWorker
+    let mut search_worker = args.search_worker(
+        args.matcher()?,
+        args.searcher()?,
+        args.printer(mode, args.stdout()),
+    )?;
+    // 2 递归查找
+    let paths = args.paths();
+    for path_buf in paths {
+        // 执行搜索、输出等流程
+        let search_result = search_worker.search(path_buf.as_path())?;
+        matched = matched || search_result.has_match();
+        // ripgrep 还支持统计功能，但是这里不展示了
+    }
+    Ok(matched)
+}
 
-// fn search(args: &HiArgs, mode: SearchMode) -> anyhow::Result<bool> {
-//     //1 创建 SearchWorker
-//     let mut searcher = args.search_worker(
-//         args.matcher()?,
-//         args.searcher()?,
-//         args.printer(mode, args.stdout()),
-//     )?;
-//
-//     let searcher = SearcherBuilder::new()
-//         .build();
-//     //  matcher
-//     let matcher = PatternMatcher::RustRegex(RegexMatcherBuilder::new()
-//         .build("grep").unwrap());
-//     //  printer
-//     let out = termcolor::StandardStream::stdout(ColorChoice::Auto);
-//     let standard = StandardBuilder::new()
-//         .max_columns(Some(4096))
-//         .trim_ascii(true)
-//         .build(out);
-//     let printer = Printer::Standard(standard);
-//     //  search_worker
-//     let builder = crate::search::SearchWorkerBuilder::new();
-//     let mut search_worker = builder.build(searcher, matcher, printer);
-//     // 2 执行搜索、输出等流程
-//     //  这里的例子是搜索根目录下 Cargo.toml 中包含 grep 的行
-//     let path = Path::new("./Cargo.toml");
-//     search_worker.search(path).unwrap();
-// }
+fn search_parallel(args: &HiArgs, mode: SearchMode) -> anyhow::Result<bool> {
+    //TODO
+    Ok(false)
+}
 
 // 条件编译宏，这里表示只有在执行cargo test才会编译和运行tests模块
 // Rust单元测试习惯和业务代码放在一起，集成测试则放到tests文件夹

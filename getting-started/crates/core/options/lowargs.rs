@@ -12,7 +12,7 @@ pub(crate) struct LowArgs {
 
     /// 工作模式(ripgrep支持四种)，默认工作模式是搜索，默认搜索模式是标准搜素
     pub(crate) mode: Mode,
-    /// 匹配使用的 Pattern
+    /// 匹配使用的 Pattern, 优先使用 -e/--regexp 指定的正则表达式，没有就使用 positional args 中的第一个参数, 为何是用 Vec？
     pub(crate) patterns: Vec<PatternSource>,
     /// 大小写是否敏感
     pub(crate) case: CaseMode,
@@ -45,7 +45,7 @@ pub(crate) enum LoggingMode {
     Trace,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum Mode {
     /// 执行搜索
     Search(SearchMode),
@@ -61,7 +61,7 @@ impl Default for Mode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum SearchMode {
     // 标准搜索模式，即搜索路径、文件中匹配行及匹配字段并打印
     Standard,

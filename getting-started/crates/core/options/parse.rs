@@ -96,7 +96,7 @@ impl Parser {
                 // 其实上面单独匹配的参数可以删除，因为在FLAGS中已经加上了对应选项的Flag实现
                 Arg::Short(ch) => self.find_short(ch),
                 Arg::Long(name) => self.find_long(name),
-                // 3 positional args
+                // 3 positional args， 解析不带 "-" "--" 的参数，比如 "-i --debug main Cargo.toml" 中的 main Cargo.toml
                 Arg::Value(value) => {
                     args.positional.push(value);
                     continue;
@@ -118,7 +118,7 @@ impl Parser {
             } else if flag_info.flag.is_switch() {
                 FlagValue::Switch(true)   //返回开启
             } else {
-                FlagValue::Value(parser.value().with_context(|| {   //parser.value() 解析选项的值，比如 --path-separator=: 的值是":"
+                FlagValue::Value(parser.value().with_context(|| {   //parser.value() 解析当前选项的值，比如 --path-separator=: 的值是":"
                     format!("missing value for flag {flag_info}")
                 })?)
             };
@@ -146,7 +146,7 @@ impl Parser {
         // &str -> &[u8]
         let map_index = name.as_bytes();
         if let Some(info_index) = self.map.find(map_index) {
-            return FlagLookup::Match(&self.info[info_index])
+            return FlagLookup::Match(&self.info[info_index]);
         }
         FlagLookup::UnrecognizedLong(String::from(name))
     }
@@ -301,8 +301,9 @@ enum FlagInfoKind {
 
 #[cfg(test)]
 mod tests {
-    use crate::options::{parse, ParseResult};
-    use crate::options::lowargs::{CaseMode, LowArgs, SpecialMode};
+    use crate::options::{HiArgs, parse, ParseResult};
+    use crate::options::lowargs::{CaseMode, LowArgs, Mode, SpecialMode};
+    use crate::options::parse::parse_low;
 
     /// 测试特殊选项
     #[test]
@@ -343,6 +344,29 @@ mod tests {
                 assert_eq!(Some(b':'), low_args.path_separator);
             }
             ParseResult::Err(_) => {
+                assert!(false)
+            }
+        }
+    }
+
+    /// 测试常用的搜索选项，比如： -i -n --column --heading --path-separator=:
+    #[test]
+    fn parse_low_then_hi() {
+        let argv = ["-in", "--column", "--heading", "--path-separator=:", "grep", "Cargo.html"];
+        let hiargs = parse_low(argv.iter().cloned())
+            .and_then(|low| match HiArgs::from_low_args(low) {
+                Ok(hi) => ParseResult::Ok(hi),
+                Err(err) => ParseResult::Err(err),
+            });
+        match hiargs {
+            ParseResult::Special(_) => {
+                assert!(false)
+            }
+            ParseResult::Ok(args) => {
+                assert!(true)
+            }
+            ParseResult::Err(err) => {
+                println!("error: {err}");
                 assert!(false)
             }
         }

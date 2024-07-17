@@ -85,6 +85,11 @@ impl RegexMatcherBuilder {
         self
     }
 
+    pub fn case_smart(&mut self, yes: bool) -> &mut RegexMatcherBuilder {
+        self.config.case_smart = yes;
+        self
+    }
+
     pub fn dot_matches_new_line(
         &mut self,
         yes: bool,

@@ -7,7 +7,7 @@ use grep::searcher::Searcher;
 struct Config {}
 
 #[derive(Clone, Debug)]
-struct SearchWorkerBuilder {
+pub(crate) struct SearchWorkerBuilder {
     config: Config,
 }
 
@@ -89,10 +89,15 @@ impl<W: WriteColor> SearchWorker<W> {
 }
 
 #[derive(Clone, Debug, Default)]
-struct SearchResult {
+pub(crate) struct SearchResult {
     //是否有匹配的行
     has_match: bool,
+}
 
+impl SearchResult {
+    pub(crate) fn has_match(&self) -> bool {
+        self.has_match
+    }
 }
 
 /// 支持的正则引擎匹配器，这里只展示 Rust Regex

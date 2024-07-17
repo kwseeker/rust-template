@@ -37,6 +37,7 @@ rand = "0.9.0-alpha.1"
 regex-automata = "0.4.7"
 regex-syntax = "0.8.0"
 termcolor = "1.3.0" # 提供了将彩色文本写入终端的跨平台抽象
+walkdir = "2.5.0"
 
 [profile.release]
 debug = true

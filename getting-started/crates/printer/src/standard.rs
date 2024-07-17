@@ -66,6 +66,21 @@ impl StandardBuilder {
         }
     }
 
+    pub fn column(&mut self, column: bool) -> &mut StandardBuilder {
+        self.config.column = column;
+        self
+    }
+
+    pub fn heading(&mut self, heading: bool) -> &mut StandardBuilder {
+        self.config.heading = heading;
+        self
+    }
+
+    pub fn path_terminator(&mut self, path_terminator: Option<u8>) -> &mut StandardBuilder {
+        self.config.path_terminator = path_terminator;
+        self
+    }
+
     pub fn color_specs(&mut self, specs: ColorSpecs) -> &mut StandardBuilder {
         self.config.colors = specs;
         self

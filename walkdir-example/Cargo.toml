@@ -1,0 +1,11 @@
+[package]
+name = "walkdir-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+walkdir = "2.5.0"
+
+[[test]]
+name = "unit"
+path = "tests/tests.rs"
