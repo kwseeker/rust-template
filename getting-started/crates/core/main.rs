@@ -22,6 +22,8 @@ mod options;
 mod logger;
 mod search;
 
+/// 二进制执行，比如: gs -i --debug grep ./crates/grep
+/// RustRover执行，配置 Command: run --package getting-started --bin gs -- -i --debug grep ./crates/grep
 // Rust 函数定义格式 fn function_name(parameters) -> return_type {...}
 fn main() -> ExitCode {
     //1 初始化日志
