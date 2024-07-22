@@ -8,7 +8,7 @@ jobs:
       - name: Download Reviewer   # 先下载二进制的 AI Code Reviewer, 本地在 Linux Mint 编译
         # 这里的 “|” 和 shell 脚本中的 "\" 效果相同，表示作为一个整体执行
         run: |
-          curl -LJO https://github.com/kwseeker/rust-template/.github/tools/ai-code-reviewer
+          curl -LJO https://github.com/kwseeker/rust-template/raw/master/.github/tools/ai-code-reviewer
       - name: Make executable
         run: chmod +x ai-code-reviewer
       - name: Execute AI Code Reviewer
