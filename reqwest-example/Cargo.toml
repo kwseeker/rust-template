@@ -1,0 +1,12 @@
+[package]
+name = "reqwest-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+reqwest = "0.12.5"
+tokio = { version = "1.38.1", features = ["full"] }
+
+[[test]]
+name = "unit"
+path = "tests/tests.rs"
