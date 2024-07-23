@@ -1,6 +1,11 @@
 # AI 代码评审工作流
 name: AI Code Review
-on: [push]        # 合并请求时触发
+on:
+  push:            # 在推送提交或标记或使用模板创建存储库时运行工作流
+    branches:
+      - 'master'
+      - 'releases/**'
+      - 'features/**'
 jobs:
   Code-Review:    # 任务名称
     runs-on: ubuntu-latest    # 定义要运行任务的计算机类型
