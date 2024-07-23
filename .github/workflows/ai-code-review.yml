@@ -6,6 +6,8 @@ on:
       - 'master'
       - 'releases/**'
       - 'features/**'
+  pull_request:
+    types: [opened, reopened] # 在 Pull Request 被创建以及被重新打开时触发
 jobs:
   Code-Review:    # 任务名称
     runs-on: ubuntu-latest    # 定义要运行任务的计算机类型
