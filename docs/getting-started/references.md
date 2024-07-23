@@ -6,6 +6,7 @@
 + [标准库文档](https://doc.rust-lang.org/std/)
 + [The Cargo Book](https://doc.rust-lang.org/cargo/index.html#/)  / [中文版](https://rustwiki.org/zh-CN/cargo/#/)
 + https://crates.io/ (cargo 官方依赖仓库)
++ [Rust语言圣经](https://course.rs/about-book.html)
 + 《深入浅出Rust》
 + 《Rust编程之道》
 + [Rust语言开源杂志](https://rustmagazine.github.io/rust_magazine_2021/index.html#rust语言开源杂志2021)

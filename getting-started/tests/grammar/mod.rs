@@ -26,6 +26,7 @@ mod trait_marker;
 mod macro_derive;
 mod file;
 mod generic;
+mod async_await;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]
