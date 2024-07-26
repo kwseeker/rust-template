@@ -9,3 +9,11 @@ impl OpenAI {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn connect_openai() {
+
+    }
+}

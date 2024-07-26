@@ -1,0 +1,12 @@
+[package]
+name = "rustglm-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+RustGLM = "0.1.4"
+tokio = "1.38.1"
+
+[[test]]
+name = "test"
+path = "tests/tests.rs"

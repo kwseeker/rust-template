@@ -1,5 +1,7 @@
+use std::cmp::PartialEq;
 use std::time::{Duration, Instant};
 use anyhow::{bail, Context};
+use regex::Regex;
 use reqwest::{Client, Method, Response};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
@@ -63,7 +65,7 @@ impl Github {
                     let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error text".into());
                     bail!(error_text)
                 }
-            },
+            }
             Err(e) => bail!("Request {} failed with error: {}", url_cloned, e),
         }
     }
@@ -145,12 +147,114 @@ pub(crate) struct PullRequestDiff {
     status: Option<Status>,
 }
 
+impl PullRequestDiff {
+    /// 提取文件代码差异（主要在 patch 字段），过滤掉非代码文件、被删除的文件
+    pub(crate) fn code_diffs(&self) -> anyhow::Result<Vec<String>> {
+        // 过滤掉非代码文件、被删除的文件
+        let mut need_review = match self.status {
+            None => false,
+            Some(Status::Added) => true,
+            Some(Status::Modified) => true,
+            Some(Status::Removed) => true,
+        };
+        need_review = need_review && CodeFile::is_code_file(&self.filename);
+        if !need_review {
+            return Ok(Vec::new());
+        }
+
+        // 每个patch中可能有多个差异块（diff block），拆分
+        let regex = Regex::new(r"@@\s-(\d+)(?:,(\d+))?\s\+(\d+)(?:,(\d+))?\s@@")?;
+        let mut diff_blocks = Vec::new();
+        let (mut start, mut end) = (0, 0);
+        loop {
+            let mat = regex.find(&self.patch[start..]);
+            if mat.is_none() {
+                break;
+            }
+            // 新增行数为0，说明这个块中全是删除，不需要review
+            let caps = regex.captures(mat.unwrap().as_str()).unwrap();
+            let new_lines = caps.get(4).map_or(0, |m|
+            m.as_str().parse::<usize>().unwrap_or(0));
+            if new_lines <= 0 {
+                break;
+            }
+
+            let range = mat.unwrap().range();
+            end = range.end + start;
+            let next_mat = regex.find(&self.patch[end..]);
+            if next_mat.is_some() {
+                let next_range = next_mat.unwrap().range();
+                diff_blocks.push(self.patch[start..end + next_range.start].to_string());
+                start = end + next_range.start;
+            } else {
+                diff_blocks.push(self.patch[start..].to_string());
+                break;
+            }
+        }
+        Ok(diff_blocks)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Status {
     Added,
     Modified,
     Removed,
+}
+
+enum CodeFile {
+    C,
+    Cpp,
+    Go,
+    Java,
+    JavaScript,
+    Lua,
+    Python,
+    Rust,
+    TypeScript,
+}
+
+impl CodeFile {
+    fn from_file_suffix(file_name: &String) -> Option<CodeFile> {
+        let last_dot_idx = file_name.rfind(".");
+        if last_dot_idx.is_none() {
+            return None;
+        }
+        let p = last_dot_idx.unwrap() - 1;
+        let file_suffix = &file_name[p..];
+        match file_suffix {
+            ".c" => Some(CodeFile::C),
+            ".cpp" => Some(CodeFile::Cpp),
+            ".go" => Some(CodeFile::Go),
+            ".java" => Some(CodeFile::Java),
+            ".js" => Some(CodeFile::JavaScript),
+            ".lua" => Some(CodeFile::Lua),
+            ".py" => Some(CodeFile::Python),
+            ".rs" => Some(CodeFile::Rust),
+            ".ts" => Some(CodeFile::TypeScript),
+            _ => None,
+        }
+    }
+
+    fn suffix(&self) -> &'static str {
+        match self {
+            CodeFile::C => ".c",
+            CodeFile::Cpp => ".cpp",
+            CodeFile::Go => ".go",
+            CodeFile::Java => ".java",
+            CodeFile::JavaScript => ".js",
+            CodeFile::Lua => ".lua",
+            CodeFile::Python => ".py",
+            CodeFile::Rust => ".rs",
+            CodeFile::TypeScript => ".ts",
+        }
+    }
+
+    /// 从文件名后缀判断是否是代码文件
+    fn is_code_file(file_name: &String) -> bool {
+        Self::from_file_suffix(file_name).is_some()
+    }
 }
 
 #[cfg(test)]
@@ -204,7 +308,7 @@ mod tests {
 
     /// 请求 Github API， 测试时需要配置 GITHUB_TOKEN 环境变量
     async fn request_github(client: Client, method: Method, url: String, header_map: Option<HeaderMap>)
-        -> anyhow::Result<()>
+                            -> anyhow::Result<()>
     {
         let res = http_request(&client, method, url, header_map).await;
         match res {
@@ -218,7 +322,7 @@ mod tests {
                     let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error text".into());
                     println!("Error details: {}", error_text);
                 }
-            },
+            }
             Err(e) => println!("Request failed with error: {}", e),
         }
         Ok(())
