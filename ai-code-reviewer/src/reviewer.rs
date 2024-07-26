@@ -1,5 +1,8 @@
+use std::sync::{Arc, Mutex};
+use anyhow::Error;
 use futures::future::join_all;
 use tokio::runtime::Runtime;
+use tokio::task::JoinHandle;
 use crate::github::Github;
 use crate::openai::OpenAI;
 use crate::options::Args;
@@ -43,12 +46,19 @@ impl Reviewer {
         let mut handles = Vec::new();
         for diff in pr.diffs() {
             // 对每个文件的处理（Code Review、评论追加）都异步进行
-            let jh = self.rt.spawn(async {
+            let jh: JoinHandle<Result<(), Error>> = self.rt.spawn(async {
+                let code_diffs = diff.code_diffs()?;
+
                 // 2 AI 评审，从 PR 中提取 diff 信息
-                // self.openai.code_review(diff);
+                for code_diff in code_diffs {
+                    println!("code_diff: {}", code_diff)
+                    // self.openai.code_review(diff);
+                }
 
                 // 3 在 PullRequest 下追加评论，填写 AI 评审结果
                 //   https://docs.github.com/zh/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+
+                Ok(())
             });
             handles.push(jh);
         }

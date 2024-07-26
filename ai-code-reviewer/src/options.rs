@@ -56,7 +56,7 @@ fn parse(argv: Vec<OsString>) -> anyhow::Result<Args> {
                 let ref_value = value.string().context("Invalid value (unparseable) for --pr-number")?;
                 args.event = Some(Event::Push(ref_value));
             },
-            _ => anyhow::bail!("unknown option"),
+            _ => bail!("unknown option"),
         }
     }
     Ok(args)

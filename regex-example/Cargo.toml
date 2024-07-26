@@ -1,0 +1,11 @@
+[package]
+name = "regex-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex = "1.10.5"
+
+[[test]]
+name = "test"
+path = "tests/tests.rs"
