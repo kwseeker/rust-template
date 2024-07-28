@@ -4,7 +4,8 @@
 ///     Runtime block_on()
 ///     Runtime spawn()
 ///     tokio::spawn()
-///     Handle::spawn()
+///     Handle::spawn()     Handle 其实是 Runtime 的一个引用
+/// 异步方法中调用其他异步方法，被调用的异步方法默认会被当作新任务提交
 /// 两种线程：
 ///     用于异步任务的工作线程(worker thread)
 ///     用于同步任务的阻塞线程(blocking thread)，既像独立线程又和runtime绑定，它不受tokio的调度系统调度，tokio不会把其它任务放进该线程，也不会把该线程内的任务转移到其它线程。

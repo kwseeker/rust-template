@@ -12,11 +12,11 @@
 /// JoinHandle::is_finished() 判断任务是否已终止，它是非阻塞的
 /// tokio::task::JoinSet 用于收集一系列异步任务，并判断它们是否终止。
 use std::time::SystemTime;
+use tokio::{runtime::Runtime, time};
+use futures::future::join_all;
 
 #[test]
 fn join() {
-    use tokio::{self, runtime::Runtime, time};
-
     async fn do_one() {
         println!("doing one: {}", now());
         time::sleep(time::Duration::from_secs(2)).await;
@@ -31,8 +31,8 @@ fn join() {
 
     fn main() {
         let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            tokio::join!(do_one(), do_two());// 等待两个任务均完成，才继续向下执行代码
+        rt.block_on(async {             //异步方法中调用其他异步方法，不需要再使用 spawn() 等方式提交任务，被调用的异步方法会自动当作任务提交
+            tokio::join!(do_one(), do_two());   // 等待两个任务均完成，才继续向下执行代码
             println!("all done: {}", now());
         });
     }
@@ -43,4 +43,51 @@ fn now() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64
+}
+
+#[test]
+fn join_with_return_value() {
+    async fn do_handle(i: i32) -> i32 {
+        time::sleep(time::Duration::from_secs(1)).await;
+        println!("任务执行结果: {}, at {}", i, now());
+        i
+    };
+
+    let rt = Runtime::new().unwrap();
+    let mut fs = Vec::new();
+    rt.block_on(async {
+        println!("启动异步任务 at {}", now());
+        for i in 0..10 {
+            let f = do_handle(i);
+            fs.push(f);
+        }
+
+        let joined_fs = join_all(fs); // 将 Vec 转换为可以调度的 Future
+        let result = joined_fs.await;
+        // let results = tokio::try_join!(joined_fs).unwrap(); // 等待所有任务完成
+        println!("所有任务执行完毕, 结果: {:?}", result);
+    });
+}
+
+#[test]
+fn join_with_return_value2() {
+    async fn do_handle(i: i32) -> i32 {
+        time::sleep(time::Duration::from_secs(1)).await;
+        println!("任务执行结果: {}, at {}", i, now());
+        i
+    };
+
+    let rt = Runtime::new().unwrap();
+    let mut handles = Vec::new();
+    // rt.spawn(async {
+    println!("启动异步任务 at {}", now());
+    for i in 0..10 {
+        let handle = rt.spawn(do_handle(i));
+        handles.push(handle);
+    }
+
+    let results = rt.block_on(join_all(handles));
+    for result in results {
+        println!("任务结果: {:?}", result);
+    }
 }

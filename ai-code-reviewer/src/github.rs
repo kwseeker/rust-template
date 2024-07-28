@@ -122,11 +122,20 @@ impl PullRequestDiffs {
     pub(crate) fn diffs(&self) -> &Vec<PullRequestDiff> {
         &self.diffs
     }
+
+    pub(crate) fn diffs_filtered(&self) -> Vec<PullRequestDiff> {
+        let diffs: Vec<PullRequestDiff> = self.diffs.iter()
+            .filter(|diff| diff.need_review())
+            .cloned()
+            .collect();
+        // println!("diffs_filtered: {:?}", diffs);
+        diffs
+    }
 }
 
 /// PR Diff 信息，每个对象对应一个文件
 /// 详细参考 /repos/{owner}/{repo}/pulls/{pull_number}/files 接口返回值
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct PullRequestDiff {
     /// 文件新增的行数
@@ -151,14 +160,7 @@ impl PullRequestDiff {
     /// 提取文件代码差异（主要在 patch 字段），过滤掉非代码文件、被删除的文件
     pub(crate) fn code_diffs(&self) -> anyhow::Result<Vec<String>> {
         // 过滤掉非代码文件、被删除的文件
-        let mut need_review = match self.status {
-            None => false,
-            Some(Status::Added) => true,
-            Some(Status::Modified) => true,
-            Some(Status::Removed) => true,
-        };
-        need_review = need_review && CodeFile::is_code_file(&self.filename);
-        if !need_review {
+        if !self.need_review() {
             return Ok(Vec::new());
         }
 
@@ -174,7 +176,7 @@ impl PullRequestDiff {
             // 新增行数为0，说明这个块中全是删除，不需要review
             let caps = regex.captures(mat.unwrap().as_str()).unwrap();
             let new_lines = caps.get(4).map_or(0, |m|
-            m.as_str().parse::<usize>().unwrap_or(0));
+                m.as_str().parse::<usize>().unwrap_or(0));
             if new_lines <= 0 {
                 break;
             }
@@ -193,9 +195,24 @@ impl PullRequestDiff {
         }
         Ok(diff_blocks)
     }
+
+    fn need_review(&self) -> bool {
+        let mut need_review = match self.status {
+            None => false,
+            Some(Status::Added) => true,
+            Some(Status::Modified) => true,
+            Some(Status::Removed) => false,
+        };
+        let need_review = need_review && CodeFile::is_code_file(&self.filename);
+        need_review
+    }
+
+    pub(crate) fn file_name(&self) -> &String {
+        &self.filename
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Status {
     Added,
@@ -221,7 +238,7 @@ impl CodeFile {
         if last_dot_idx.is_none() {
             return None;
         }
-        let p = last_dot_idx.unwrap() - 1;
+        let p = last_dot_idx.unwrap();
         let file_suffix = &file_name[p..];
         match file_suffix {
             ".c" => Some(CodeFile::C),

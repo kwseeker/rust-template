@@ -27,6 +27,7 @@ mod macro_derive;
 mod file;
 mod generic;
 mod async_await;
+mod pointer_smart_rc_refcell;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]
