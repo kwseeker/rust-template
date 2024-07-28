@@ -56,3 +56,42 @@ fn usage_for_array() {
         println!("{:?}", person);
     }
 }
+
+#[test]
+fn usage_for_enum() {
+    // "lowercase", "UPPERCASE", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case", "SCREAMING-KEBAB-CASE"
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    // #[serde(rename_all = "UPPERCASE")]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    enum ReviewEvent {
+        /// 只是评论
+        Comment,
+        /// 合并投票，一个PR一般需要达到最低投票数才能合并
+        Approve,
+        /// 必须修改，否则PR无法合并
+        RequestChanges,
+    }
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Outer {
+        event: ReviewEvent,
+    }
+
+    let outer = Outer {
+        event: ReviewEvent::Comment,
+    };
+    let json = serde_json::to_string(&outer).unwrap();
+    assert_eq!(json, r#"{"event":"COMMENT"}"#);
+
+    let outer = Outer {
+        event: ReviewEvent::Approve,
+    };
+    let json = serde_json::to_string(&outer).unwrap();
+    assert_eq!(json, r#"{"event":"APPROVE"}"#);
+
+    let outer = Outer {
+        event: ReviewEvent::RequestChanges,
+    };
+    let json = serde_json::to_string(&outer).unwrap();
+    assert_eq!(json, r#"{"event":"REQUEST_CHANGES"}"#);
+}

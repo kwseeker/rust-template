@@ -16,7 +16,7 @@ pub(crate) struct Reviewer {
     /// 读取事件数据
     github: Github,
     /// AI 客户端
-    openai: &'static OpenAI,
+    openai: OpenAI,
 }
 
 impl Reviewer {
@@ -26,7 +26,7 @@ impl Reviewer {
         // 所有权的实现方式：克隆（新值有独立的所有权）、Rc智能指针（多个所有者共享所有权，某一时刻只有一个所有者），
         // 引用的方式：返回引用可以在多个地方访问(但是有生命周期的限制)，如果涉及修改一般还需要使用 RefCell（实现编译期可变、不可变引用共存, 如果涉及多个地方还需要搭配 Rc\Arc）
         let runtime_rc = Arc::new(Runtime::new().unwrap());  //TODO 这里直接unwrap() Err默认会被怎么处理？
-        let ai = OpenAI::new(runtime_rc.clone());
+        let ai = OpenAI::new();
         Reviewer {
             runtime: runtime_rc.clone(),
             github: Github::new(),
@@ -55,15 +55,13 @@ impl Reviewer {
         let diffs = pr.diffs_filtered();
         for diff in diffs {
             // 对每个文件的处理（Code Review、评论追加）都异步进行
-            let openai = self.openai;
+            let openai = self.openai.clone();
             let jh: JoinHandle<Result<(), Error>> = self.runtime.spawn(async move {
+                // 2 AI 评审，先从 PR 中提取 diff 信息，然后调用 AI 模型进行代码评审
                 let code_diffs = diff.code_diffs()?;
-
-                // 2 AI 评审，从 PR 中提取 diff 信息
                 for code_diff in code_diffs {
-                    // println!("file name: {}", diff.file_name());
-                    // println!("code_diff: {code_diff}");
-                    openai.code_review(code_diff);
+                    println!("code_diff: {code_diff}");
+                    let response = openai.code_review(code_diff).await;
                 }
 
                 // 3 在 PullRequest 下追加评论，填写 AI 评审结果
