@@ -4,7 +4,7 @@ mod reviewer;
 mod openai;
 mod github;
 mod options;
-mod errors;
+mod common;
 
 /// ai-code-reviewer [OPTION]
 /// OPTIONS:

@@ -1,0 +1,26 @@
+[[cogview_config_3]]
+model = "cogview-3"
+
+[[ai_config_glm4v]]
+model = "glm-4v"
+user_role = "user"
+
+[[ai_config_glm3]]
+assistant_role = "assistant"
+language_model = "glm-3-turbo"
+max_tokens = 8192
+system_content = "你现在是小智，一个精通各种编程语言且拥有丰富编程经验的资深工程师; 现在有一些Github项目PR需要进行代码评审，我会将代码变更片段发给你; 代码变更片段是一个json, 包含两个字段: filename、diff, filename 是代码文件相对于项目的根目录的相对路径，diff 是这个文件中的一个代码变更片段；你需要从filename自行判断编程语言类型然后对每个变更片段进行代码评审最终返回评审结果，只需要返回评审结果不要复述变更片段，如果没有发现问题或没有修改意见请直接返回“666”，全程使用中文评审，输出无长度限制。"
+system_role = "system"
+temp_float = 0.5
+top_p_float = 0.9
+user_role = "user"
+
+[[ai_config_glm4]]
+assistant_role = "assistant"
+language_model = "glm-4"
+max_tokens = 8192
+system_content = "你现在是小智，一个精通各种编程语言且拥有丰富编程经验的资深工程师; 现在有一些Github项目PR需要进行代码评审，我会将代码变更片段发给你; 代码变更片段是一个json, 包含两个字段: filename、diff, filename 是代码文件相对于项目的根目录的相对路径，diff 是这个文件中的一个代码变更片段；你需要从filename自行判断编程语言类型然后对每个变更片段进行代码评审最终返回评审结果，只需要返回评审结果不要复述变更片段，如果没有发现问题或没有修改意见请直接返回“666”，全程使用中文评审，输出无长度限制。"
+system_role = "system"
+temp_float = 0.5
+top_p_float = 0.9
+user_role = "user"

@@ -1,10 +1,10 @@
-use std::cmp::PartialEq;
 use std::time::{Duration, Instant};
 use anyhow::{bail, Context};
 use regex::Regex;
 use reqwest::{Client, Method, Response};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
+use crate::common::Null;
 
 /// Github 客户端
 pub(crate) struct Github {
@@ -48,7 +48,7 @@ impl Github {
     pub(crate) async fn get_pr_diffs(&self, pr_number: &usize) -> anyhow::Result<PullRequestDiffs> {
         let url = format!("https://api.github.com/repos/kwseeker/rust-template/pulls/{}/files", pr_number);
         let url_cloned = url.clone();
-        let res = http_request(&self.client, Method::GET, url, None).await;
+        let res = http_request::<Null>(&self.client, Method::GET, url, None, None).await;
         match res {
             Ok(response) => {
                 return if response.status().is_success() {
@@ -69,11 +69,23 @@ impl Github {
             Err(e) => bail!("Request {} failed with error: {}", url_cloned, e),
         }
     }
+
+    /// 创建 Review
+    pub(crate) async fn create_review(&self, pr_number: &usize) -> anyhow::Result<()> {
+
+        Ok(())
+    }
 }
 
 /// HTTP 请求 Github API， 测试时需要配置 GITHUB_TOKEN 环境变量
-async fn http_request(client: &Client, method: Method, url: String, header_map: Option<HeaderMap>)
-                      -> anyhow::Result<Response>
+async fn http_request<T>(client: &Client,
+                         method: Method,
+                         url: String,
+                         header_map: Option<HeaderMap>,
+                         body: Option<T>)
+                         -> anyhow::Result<Response>
+where
+    T: Serialize,
 {
     let now = Instant::now();
     let url_cloned = url.clone();
@@ -92,9 +104,12 @@ async fn http_request(client: &Client, method: Method, url: String, header_map: 
     headers.insert("X-GitHub-Api-Version", HeaderValue::from_static("2022-11-28"));
     headers.insert("User-Agent", HeaderValue::from_static("AI-Code-Reviewer")); // User-Agent 必须加，否则会 403 Forbidden
 
-    let request_builder = client
+    let mut request_builder = client
         .request(method, url)
         .headers(headers);
+    if let Some(body) = body {
+        request_builder = request_builder.json(&body);  //json() 中泛型约束是 Serialize + ?Sized，因为这里&body 取的引用，所以只需要 body 实现了 Serialize Trait
+    }
     let res = request_builder
         .timeout(Duration::from_secs(60))   //墙内本地测试发现接口响应非常慢，配置代理没起作用，多给点时间
         .send().await;
@@ -186,10 +201,14 @@ impl PullRequestDiff {
             let next_mat = regex.find(&self.patch[end..]);
             if next_mat.is_some() {
                 let next_range = next_mat.unwrap().range();
-                diff_blocks.push(self.patch[start..end + next_range.start].to_string());
+                let diff = self.patch[start..end + next_range.start].to_string();
+                let code_diff = CodeDiff::new(self.filename.clone(), diff);
+                diff_blocks.push(code_diff.to_string()?);
                 start = end + next_range.start;
             } else {
-                diff_blocks.push(self.patch[start..].to_string());
+                let diff = self.patch[start..].to_string();
+                let code_diff = CodeDiff::new(self.filename.clone(), diff);
+                diff_blocks.push(code_diff.to_string()?);
                 break;
             }
         }
@@ -203,12 +222,33 @@ impl PullRequestDiff {
             Some(Status::Modified) => true,
             Some(Status::Removed) => false,
         };
-        let need_review = need_review && CodeFile::is_code_file(&self.filename);
+        let need_review = need_review && Language::is_code_file(&self.filename);
         need_review
     }
 
     pub(crate) fn file_name(&self) -> &String {
         &self.filename
+    }
+}
+
+/// 待评审的代码差异片段
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct CodeDiff {
+    filename: String,
+    diff: String,
+}
+
+impl CodeDiff {
+    pub(crate) fn new(filename: String, diff: String) -> Self {
+        CodeDiff {
+            filename,
+            diff,
+        }
+    }
+
+    pub(crate) fn to_string(&self) -> anyhow::Result<String> {
+        let result = serde_json::to_string(self)?;
+        Ok(result)
     }
 }
 
@@ -220,7 +260,7 @@ enum Status {
     Removed,
 }
 
-enum CodeFile {
+enum Language {
     C,
     Cpp,
     Go,
@@ -232,8 +272,8 @@ enum CodeFile {
     TypeScript,
 }
 
-impl CodeFile {
-    fn from_file_suffix(file_name: &String) -> Option<CodeFile> {
+impl Language {
+    fn from_file_suffix(file_name: &String) -> Option<Language> {
         let last_dot_idx = file_name.rfind(".");
         if last_dot_idx.is_none() {
             return None;
@@ -241,30 +281,30 @@ impl CodeFile {
         let p = last_dot_idx.unwrap();
         let file_suffix = &file_name[p..];
         match file_suffix {
-            ".c" => Some(CodeFile::C),
-            ".cpp" => Some(CodeFile::Cpp),
-            ".go" => Some(CodeFile::Go),
-            ".java" => Some(CodeFile::Java),
-            ".js" => Some(CodeFile::JavaScript),
-            ".lua" => Some(CodeFile::Lua),
-            ".py" => Some(CodeFile::Python),
-            ".rs" => Some(CodeFile::Rust),
-            ".ts" => Some(CodeFile::TypeScript),
+            ".c" => Some(Language::C),
+            ".cpp" => Some(Language::Cpp),
+            ".go" => Some(Language::Go),
+            ".java" => Some(Language::Java),
+            ".js" => Some(Language::JavaScript),
+            ".lua" => Some(Language::Lua),
+            ".py" => Some(Language::Python),
+            ".rs" => Some(Language::Rust),
+            ".ts" => Some(Language::TypeScript),
             _ => None,
         }
     }
 
     fn suffix(&self) -> &'static str {
         match self {
-            CodeFile::C => ".c",
-            CodeFile::Cpp => ".cpp",
-            CodeFile::Go => ".go",
-            CodeFile::Java => ".java",
-            CodeFile::JavaScript => ".js",
-            CodeFile::Lua => ".lua",
-            CodeFile::Python => ".py",
-            CodeFile::Rust => ".rs",
-            CodeFile::TypeScript => ".ts",
+            Language::C => ".c",
+            Language::Cpp => ".cpp",
+            Language::Go => ".go",
+            Language::Java => ".java",
+            Language::JavaScript => ".js",
+            Language::Lua => ".lua",
+            Language::Python => ".py",
+            Language::Rust => ".rs",
+            Language::TypeScript => ".ts",
         }
     }
 
@@ -274,11 +314,39 @@ impl CodeFile {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+struct ReviewBody {
+    commit_id: String,
+    body: String,
+    event: ReviewEvent,
+    comments: Vec<Comment>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Comment {
+    path: String,
+    position: i32,
+    body: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum ReviewEvent {
+    /// 只是评论
+    Comment,
+    /// 合并投票，一个PR一般需要达到最低投票数才能合并
+    Approve,
+    /// 必须修改，否则PR无法合并
+    RequestChanges,
+}
+
 #[cfg(test)]
 mod tests {
     use reqwest::{Client, Method};
     use reqwest::header::{HeaderMap};
+    use serde::Serialize;
     use serde_json;
+    use crate::common::Null;
     use crate::github::http_request;
 
     #[tokio::test]
@@ -298,7 +366,7 @@ mod tests {
     async fn list_pull_requests() {
         let client = Client::new();
         let url = "https://api.github.com/repos/kwseeker/rust-template/pulls";
-        request_github(client, Method::GET, url.to_string(), None).await.unwrap();
+        request_github_nobody(client, Method::GET, url.to_string(), None).await.unwrap();
     }
 
     #[tokio::test]
@@ -306,28 +374,62 @@ mod tests {
         let client = Client::new();
         let pull_number = "1";
         let url = format!("https://api.github.com/repos/kwseeker/rust-template/pulls/{}", pull_number);
-        request_github(client, Method::GET, url, None).await.unwrap();
+        request_github_nobody(client, Method::GET, url, None).await.unwrap();
     }
 
     #[tokio::test]
     async fn repo_content() {
         let client = Client::new();
         let url = "https://api.github.com/repos/kwseeker/rust-template/contents/.github";
-        request_github(client, Method::GET, url.to_string(), None).await.unwrap();
+        request_github_nobody(client, Method::GET, url.to_string(), None).await.unwrap();
     }
 
     #[tokio::test]
     async fn pull_request_files() {
         let client = Client::new();
         let url = "https://api.github.com/repos/kwseeker/rust-template/pulls/1/files";
-        request_github(client, Method::GET, url.to_string(), None).await.unwrap();
+        request_github_nobody(client, Method::GET, url.to_string(), None).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_review_comment() {
+        let client = Client::new();
+        let url = "https://api.github.com/repos/kwseeker/rust-template/pulls/3/comments";
+        request_github_nobody(client, Method::GET, url.to_string(), None).await.unwrap();
+    }
+
+    /// 关于 Review 和 Review Comment:
+    /// Review 指代某次代码审查提交、Review Comment 则指代码审查中的评论，比如一个PR 可以审查多次，每次可能审查多个代码块
+    /// 代码审查的评论信息需要提交后其他人才能看到
+    /// 对应手动提交代码审查的完整流程是：先添加 Review Comments, 然后创建（创建时会整合 Comments）并提交 Review,
+    /// 如果是AI评审直接创建 Review 并提交，创建 Review 时直接将AI的评审 Comment 格式化加入 comments 参数即可，详细参考 GitHub API 文档。
+    #[tokio::test]
+    async fn list_reviews() {
+        let client = Client::new();
+        let url = "https://api.github.com/repos/kwseeker/rust-template/pulls/3/reviews";
+        request_github_nobody(client, Method::GET, url.to_string(), None).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_review() {
+        let client = Client::new();
+        let url = "https://api.github.com/repos/kwseeker/rust-template/pulls/3/reviews";
+        request_github_nobody(client, Method::POST, url.to_string(), None).await.unwrap();
+    }
+
+    async fn request_github_nobody(client: Client, method: Method, url: String, header_map: Option<HeaderMap>)
+                                      -> anyhow::Result<()> {
+        request_github::<Null>(client, method, url, header_map, None).await
     }
 
     /// 请求 Github API， 测试时需要配置 GITHUB_TOKEN 环境变量
-    async fn request_github(client: Client, method: Method, url: String, header_map: Option<HeaderMap>)
-                            -> anyhow::Result<()>
+    async fn request_github<T>(client: Client, method: Method, url: String, header_map: Option<HeaderMap>,
+                                      body: Option<T>)
+                                      -> anyhow::Result<()>
+    where
+        T: Serialize,
     {
-        let res = http_request(&client, method, url, header_map).await;
+        let res = http_request(&client, method, url, header_map, body).await;
         match res {
             Ok(response) => {
                 if response.status().is_success() {

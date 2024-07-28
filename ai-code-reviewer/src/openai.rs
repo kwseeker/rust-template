@@ -1,44 +1,35 @@
-use std::sync::{Arc, OnceLock};
-use tokio::runtime::Runtime;
-
 /// OpenAI 客户端
+#[derive(Clone)]
 pub(crate) struct OpenAI {
-    client: RustGLM::RustGLM,
+    // RustGLM 中存储的只是每次输入和输出，并不是不变的配置，不适合放在这里
+    // client: RustGLM::RustGLM,
     api_key: String,
+    glm_version: &'static str,
+    config_file: &'static str,
 }
 
 impl OpenAI {
-    pub(crate) fn new(runtime: Arc<Runtime>) -> &'static Self {
-        // 避免重复创建
-        static P: OnceLock<OpenAI> = OnceLock::new();
-        P.get_or_init(|| {                              //OnceLock 控制的变量只会写入一次（且是同步写入）
-            let api_key = std::env::var("CHATGLM_API_KEY").unwrap();
-            println!("CHATGLM_API_KEY: {api_key}");
-            OpenAI {
-                client: runtime.block_on(RustGLM::RustGLM::new()),
-                api_key,
-            }
-        })
+    pub(crate) fn new() -> Self {
+        let api_key = std::env::var("CHATGLM_API_KEY").unwrap();
+        println!("CHATGLM_API_KEY: {api_key}");
+        OpenAI {
+            api_key,
+            glm_version: "glm-4",
+            config_file: "Constants.toml",
+        }
     }
 
-    pub(crate) fn code_review(&self, code_diff: String) {
-        println!("code_review: ...");
-        // self.client.set_user_input(code_diff);
-
-        //     rust_glm.set_user_input(user_in.trim().to_string()); // 使用修改后的 RustGLM 实例
-        //
-        //     // Constants.toml 中是调用环境设置、以及聊天预设
-        //     let ai_response = rust_glm.rust_chat_glm(Some(api_key),"glm-4","Constants.toml").await;
-        //     println!("Liliya: {}", ai_response);
-        //
-        //     if ai_response.is_empty() {
-        //         break;
-        //     }
+    pub(crate) async fn code_review(&self, code_diff: String) -> String {
+        println!("Review Begin ...");
+        let mut rust_glm = RustGLM::RustGLM::new().await;
+        rust_glm.set_user_input(code_diff);
+        let ai_response = rust_glm
+            .rust_chat_glm(Some(self.api_key.clone()), self.glm_version.clone(),self.config_file.clone()).await;
+        println!("Review Response: {ai_response}");
+        ai_response
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn connect_openai() {}
 }
