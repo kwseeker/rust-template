@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
 
+/// 测试目标：
+/// 1 嵌套结构体、枚举的反序列化
+/// 2 基本数据类型、枚举反序列化默认值
+/// 3 字符串格式转换
+/// 4 Option 字段为空时反序列化
 #[test]
 fn usage() {
     #[derive(Debug, Default, Serialize, Deserialize)]
@@ -37,8 +42,18 @@ fn usage() {
     assert!(user.is_active);
     assert_eq!(user.addr.addr, "123 Main St");
     assert_eq!(user.addr.id, 12345);
+
+    // 4 Option 字段为空时反序列化
+    // let json = r#"{"name": "John Doe", "is_active": true, "addr": {"addr": "123 Main St", "id": 12345}}"#;
+    let json = r#"{"name": "John Doe", "is_active": true, "addr": {"addr": "123 Main St", "id": 12345}, "status": null}"#;
+    let user: User = serde_json::from_str(json).expect("Failed to parse JSON");
+    assert!(user.status.is_none());
+    // 注意序列化后 status 字段为 null, 不是省略 status 字段
+    println!("{}", serde_json::to_string(&user).unwrap())   //{"name":"John Doe","age":0,"is_active":true,"addr":{"addr":"123 Main St","id":12345},"status":null}
 }
 
+/// 测试目标：
+/// 1 结构体数组的反序列化
 #[test]
 fn usage_for_array() {
     #[derive(Debug, Serialize, Deserialize)]
@@ -56,7 +71,8 @@ fn usage_for_array() {
         println!("{:?}", person);
     }
 }
-
+/// 测试目标：
+/// 1 枚举->字符串格式转换
 #[test]
 fn usage_for_enum() {
     // "lowercase", "UPPERCASE", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case", "SCREAMING-KEBAB-CASE"
@@ -94,4 +110,23 @@ fn usage_for_enum() {
     };
     let json = serde_json::to_string(&outer).unwrap();
     assert_eq!(json, r#"{"event":"REQUEST_CHANGES"}"#);
+}
+
+/// 测试目标：
+/// 1 Option 字段为 None 时, 序列化不包含此字段
+#[test]
+fn usage_for_option_none() {
+    // Option 字段为 None 时序列化不展示此字段
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Outer {
+        // 如果 Option 类型值为 None, 序列化时不包含此字段
+        #[serde(skip_serializing_if = "Option::is_none")]
+        event: Option<String>,
+    }
+
+    let outer = Outer {
+        event: None,
+    };
+    let json = serde_json::to_string(&outer).unwrap();
+    assert_eq!(json, "{}");
 }

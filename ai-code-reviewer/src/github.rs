@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::time::{Duration, Instant};
 use anyhow::{bail, Context};
 use regex::Regex;
@@ -70,10 +71,35 @@ impl Github {
         }
     }
 
-    /// 创建 Review
-    pub(crate) async fn create_review(&self, pr_number: &usize) -> anyhow::Result<()> {
-
-        Ok(())
+    /// 通过接口实现代码 Review, 两种方式：
+    /// 1）先创建 Pending 状态的 Review, 然后添加评审信息，最后提交
+    /// 2）直接通过 Create Review API 中提交（选择 APPROVE, REQUEST_CHANGES, or COMMENT），AI 代码评审使用这种方式直接提交就行
+    pub(crate) async fn create_review(&self, pr_number: &usize, comments: Vec<Comment>) -> anyhow::Result<()> {
+        let url = format!("https://api.github.com/repos/kwseeker/rust-template/pulls/{}/reviews", pr_number);
+        let url_cloned = url.clone();
+        let current = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let body = Some(ReviewBody {
+            commit_id: None,    // 让GitHub自动获取最新提交即可
+            body: Some(String::from("AI code reviewer auto comments at ").add(&current)),
+            event: Some(ReviewEvent::Comment),    //AI 评审仅仅作为 Comment 建议，不记录投票，也不要求强制修改
+            comments,
+        });
+        let res = http_request::<ReviewBody>(&self.client, Method::GET, url, None, body).await;
+        match res {
+            Ok(response) => {
+                return if response.status().is_success() {
+                    println!("Request {} succeeded!", url_cloned);
+                    // let json_body: serde_json::Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+                    // println!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
+                    Ok(())
+                } else {
+                    println!("Request {} failed with status code: {}", url_cloned, response.status());
+                    let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error text".into());
+                    bail!(error_text)
+                }
+            }
+            Err(e) => bail!("Request {} failed with error: {}", url_cloned, e),
+        }
     }
 }
 
@@ -108,6 +134,7 @@ where
         .request(method, url)
         .headers(headers);
     if let Some(body) = body {
+        println!("Request body: {}", serde_json::to_string_pretty(&body).unwrap());
         request_builder = request_builder.json(&body);  //json() 中泛型约束是 Serialize + ?Sized，因为这里&body 取的引用，所以只需要 body 实现了 Serialize Trait
     }
     let res = request_builder
@@ -172,8 +199,8 @@ pub(crate) struct PullRequestDiff {
 }
 
 impl PullRequestDiff {
-    /// 提取文件代码差异（主要在 patch 字段），过滤掉非代码文件、被删除的文件
-    pub(crate) fn code_diffs(&self) -> anyhow::Result<Vec<String>> {
+    /// 提取文件中代码差异（主要在 patch 字段），过滤掉非代码文件、被删除的文件
+    pub(crate) fn code_diffs(&self) -> anyhow::Result<Vec<DiffHunk>> {
         // 过滤掉非代码文件、被删除的文件
         if !self.need_review() {
             return Ok(Vec::new());
@@ -190,11 +217,14 @@ impl PullRequestDiff {
             }
             // 新增行数为0，说明这个块中全是删除，不需要review
             let caps = regex.captures(mat.unwrap().as_str()).unwrap();
-            let new_lines = caps.get(4).map_or(0, |m|
-                m.as_str().parse::<usize>().unwrap_or(0));
+            let new_lines = caps.get(4).map_or(0, |m| m.as_str().parse::<u32>().unwrap());
             if new_lines <= 0 {
                 break;
             }
+
+            let old_start = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+            let old_lines = caps.get(2).map_or(0, |m| m.as_str().parse::<u32>().unwrap());
+            let new_start = caps.get(3).unwrap().as_str().parse::<u32>().unwrap();
 
             let range = mat.unwrap().range();
             end = range.end + start;
@@ -202,13 +232,15 @@ impl PullRequestDiff {
             if next_mat.is_some() {
                 let next_range = next_mat.unwrap().range();
                 let diff = self.patch[start..end + next_range.start].to_string();
-                let code_diff = CodeDiff::new(self.filename.clone(), diff);
-                diff_blocks.push(code_diff.to_string()?);
+                let hunk_line = HunkLine::from_last_line(diff.clone(), old_start, old_lines, new_start, new_lines);
+                let diff_hunk = DiffHunk::new(self.filename.clone(), diff, hunk_line);
+                diff_blocks.push(diff_hunk);
                 start = end + next_range.start;
             } else {
                 let diff = self.patch[start..].to_string();
-                let code_diff = CodeDiff::new(self.filename.clone(), diff);
-                diff_blocks.push(code_diff.to_string()?);
+                let hunk_line = HunkLine::from_last_line(diff.clone(), old_start, old_lines, new_start, new_lines);
+                let diff_hunk = DiffHunk::new(self.filename.clone(), diff, hunk_line);
+                diff_blocks.push(diff_hunk);
                 break;
             }
         }
@@ -231,24 +263,89 @@ impl PullRequestDiff {
     }
 }
 
-/// 待评审的代码差异片段
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub(crate) struct CodeDiff {
+/// 待评审的代码差异片段（对应每一个 @@ hunk）
+#[derive(Serialize, Deserialize)]
+pub(crate) struct DiffHunk {
+    /// 实际是文件相对于项目根目录的相对路径
     filename: String,
+    /// @@ hunk 内容
     diff: String,
+    /// hunk 最后一行，计划是将AI评审结果添加到 diff hunk 的最后一行后面
+    last_line: HunkLine,
 }
 
-impl CodeDiff {
-    pub(crate) fn new(filename: String, diff: String) -> Self {
-        CodeDiff {
+impl DiffHunk {
+    pub(crate) fn new(filename: String, diff: String, hunk_line: HunkLine) -> Self {
+        DiffHunk {
             filename,
             diff,
+            last_line: hunk_line,
         }
     }
 
     pub(crate) fn to_string(&self) -> anyhow::Result<String> {
         let result = serde_json::to_string(self)?;
         Ok(result)
+    }
+
+    pub(crate) fn filename(&self) -> &String {
+        &self.filename
+    }
+
+
+    pub(crate) fn last_line(&self) -> &HunkLine {
+        &self.last_line
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct HunkLine {
+    line: u32,
+    side: Side,
+}
+
+impl HunkLine {
+    // 获取 @@ hunk 最后一行的HunkLine
+    fn from_last_line(mut hunk: String, old_start: u32, old_lines: u32, new_start: u32, new_lines:u32) -> HunkLine {
+        // 如果包含文件末尾的话，如果没有留空行，Github 会为 @@ hunk 自动添加一个空行 “\n\\ No newline at end of file”
+        let github_end_line = "\\ No newline at end of file";
+        if hunk.ends_with(github_end_line) {
+            hunk = hunk.trim_end_matches(github_end_line).to_string();
+        }
+        // 如果最后一行行尾为换行符，则去除
+        hunk = hunk.trim_end_matches('\n').to_string();
+        // 查找最后一行的开头
+        let mut idx = hunk.rfind("\n");
+        return match idx {
+            None => {
+                HunkLine {   //只有一行
+                    line: new_start,
+                    side: Side::Right,
+                }
+            }
+            Some(index) => {
+                let last_line = &hunk[index..];
+                if last_line.starts_with("-") {
+                    HunkLine {
+                        line: old_start + old_lines - 1,
+                        side: Side::Left,
+                    }
+                } else {
+                    HunkLine {
+                        line: new_start + new_lines - 1,
+                        side: Side::Right,
+                    }
+                }
+            }
+        }
+    }
+
+    fn line(&self) -> u32 {
+        self.line   //基本数据类型在栈上分配，实际返回的是一个副本
+    }
+
+    fn side(&self) -> &Side {
+        &self.side
     }
 }
 
@@ -315,39 +412,108 @@ impl Language {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ReviewBody {
-    commit_id: String,
-    body: String,
-    event: ReviewEvent,
+pub(crate) struct ReviewBody {
+    /// 差异代码所属提交的ID (SHA)，不指定的话取 PR 中最新的 commit ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    commit_id: Option<String>,
+    /// 文本字符串，对应手动操作时 Review changes 框中的信息
+    /// 创建 REQUEST_CHANGES 或 COMMENT Review 时，必填
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<String>,
+    /// Review 行为类型，APPROVE, REQUEST_CHANGES, or COMMENT， 还有一种 Pending 中间状态
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event: Option<ReviewEvent>,
+    /// review comment 列表
     comments: Vec<Comment>,
 }
 
+/// 关于下面字段建议自行去 GitHub 测试下，有些字段官方文档说的也不是很清楚
 #[derive(Serialize, Deserialize)]
-struct Comment {
+pub(crate) struct Comment {
+    /// 评论注释文件的相对路径
     path: String,
-    position: i32,
+    /// 从官方文档翻译过来意思是
+    /// 你想添加评论的行相对于第一个 "@@" hunk 头向下的行数，但是在 devtools 手动测试发现好像又不太对, TODO ?
+    #[serde(skip_serializing_if = "Option::is_none")]
+    position: Option<i32>,
+    /// 评论内容
     body: String,
+    // 后面4个是可选字段，但是官方文档没有解释什么用途，有需要自行测试吧
+    /// 推测是和 side 一起使用，表示想添加评论的行是旧文件的行还是新文件的行
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<u32>,
+    /// 推测是和 line 一起使用，side: Left 表示 line 是旧文件的行， right
+    #[serde(skip_serializing_if = "Option::is_none")]
+    side: Option<Side>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    start_line: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    start_side: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+// #[serde(rename_all = "lowercase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum Side {
+    Left,
+    Right,
+}
+
+impl Comment {
+    pub(crate) fn new(path: String, body: String) -> Self {
+        Comment {
+            path,
+            position: None,
+            body,
+            line: None,
+            side: None,
+            start_line: None,
+            start_side: None,
+        }
+    }
+
+    pub(crate) fn new_with_line(path: &String, body: String, last_line: &HunkLine) -> Self {
+        let mut comment = Comment::new(path.clone(), body);
+        comment.line(last_line.line());
+        comment.side(last_line.side().clone());
+        comment
+    }
+
+    fn position(&mut self, position: i32) {
+        self.position = Some(position)
+    }
+
+    fn line(&mut self, line: u32) {
+        self.line = Some(line)
+    }
+
+    fn side(&mut self, side: Side) {
+        self.side = Some(side)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum ReviewEvent {
-    /// 只是评论
+    /// 默认的行为，表示Review尚未完成，完成后需要提交，这只是 Review 的中间状态，提交时选择后面三种状态之一
+    Pending,
+    /// 只是评论，不参与投票计数
     Comment,
     /// 合并投票，一个PR一般需要达到最低投票数才能合并
     Approve,
-    /// 必须修改，否则PR无法合并
+    /// 必须修改，否则PR无法合并，不参与投票计数
     RequestChanges,
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Add;
     use reqwest::{Client, Method};
     use reqwest::header::{HeaderMap};
     use serde::Serialize;
     use serde_json;
     use crate::common::Null;
-    use crate::github::http_request;
+    use crate::github::{Comment, http_request, ReviewBody, ReviewEvent, Side};
 
     #[tokio::test]
     async fn get_pr_diffs() {
@@ -410,22 +576,66 @@ mod tests {
         request_github_nobody(client, Method::GET, url.to_string(), None).await.unwrap();
     }
 
+    /// 测试通过 API 创建 Review Comment
     #[tokio::test]
     async fn create_review() {
         let client = Client::new();
         let url = "https://api.github.com/repos/kwseeker/rust-template/pulls/3/reviews";
-        request_github_nobody(client, Method::POST, url.to_string(), None).await.unwrap();
+        // 获取当前时间 2023-01-01 00:00:00 格式
+        let current = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let mut comments = Vec::new();
+        // 每个diff段一个Comment
+        let mut comment = Comment::new(
+            "ai-code-reviewer/src/github.rs".to_string(),
+            "AI's some comments here ...".to_string(),
+        );
+        // comment.position(96);
+        comment.line(118);
+        comment.side(Side::Right);
+        comments.push(comment);
+        let body = Some(ReviewBody {
+            commit_id: Some("a8c502ecfdf14d705274d70bfd4f55885b4417dd".to_string()),
+            body: Some(String::from("AI code reviewer auto comments at ").add(&current)),
+            event: Some(ReviewEvent::Comment),    //AI 评审仅仅作为 Comment 建议
+            comments,
+        });
+        request_github(client, Method::POST, url.to_string(), None, body).await.unwrap();
+    }
+
+    /// 测试 Create Review API 默认值
+    #[tokio::test]
+    async fn create_review_with_default_params() {
+        let client = Client::new();
+        let url = "https://api.github.com/repos/kwseeker/rust-template/pulls/3/reviews";
+        // 获取当前时间 2023-01-01 00:00:00 格式
+        let current = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let mut comments = Vec::new();
+        // 每个diff段一个Comment
+        let mut comment = Comment::new(
+            "ai-code-reviewer/src/github.rs".to_string(),
+            "AI's some comments here ...".to_string(),
+        );
+        comment.line(120);
+        comment.side(Side::Right);
+        comments.push(comment);
+        let body = Some(ReviewBody {
+            commit_id: None,
+            body: Some(String::from("AI code reviewer auto comments at ").add(&current)),
+            event: Some(ReviewEvent::Comment),    //AI 评审仅仅作为 Comment 建议
+            comments,
+        });
+        request_github(client, Method::POST, url.to_string(), None, body).await.unwrap();
     }
 
     async fn request_github_nobody(client: Client, method: Method, url: String, header_map: Option<HeaderMap>)
-                                      -> anyhow::Result<()> {
+                                   -> anyhow::Result<()> {
         request_github::<Null>(client, method, url, header_map, None).await
     }
 
     /// 请求 Github API， 测试时需要配置 GITHUB_TOKEN 环境变量
     async fn request_github<T>(client: Client, method: Method, url: String, header_map: Option<HeaderMap>,
-                                      body: Option<T>)
-                                      -> anyhow::Result<()>
+                               body: Option<T>)
+                               -> anyhow::Result<()>
     where
         T: Serialize,
     {
