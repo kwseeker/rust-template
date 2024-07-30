@@ -1,9 +1,6 @@
 use std::sync::Arc;
-use anyhow::Error;
-use futures::future::join_all;
 use tokio::runtime::Runtime;
-use tokio::task::JoinHandle;
-use crate::github::{Comment, Github};
+use crate::github::{Comment, Github, PullRequestDiffs};
 use crate::openai::OpenAI;
 use crate::options::Args;
 use crate::options::Event::{PullRequest, Push};
@@ -50,50 +47,38 @@ impl Reviewer {
         let pr_future = self.github.get_pr_diffs(pr_number);
         let pr = self.runtime.block_on(pr_future)?;
 
-        // 2 AI 评审
-        let (mut handles, mut comments) = (Vec::new(), Vec::<Comment>::new());
-        let diffs = pr.diffs_filtered();
-        for diff in diffs {
-            // 对每个文件的处理（Code Review、评论追加）都异步进行
-            let openai = self.openai.clone();
-            let jh: JoinHandle<Result<Vec<Comment>, Error>> = self.runtime.spawn(async move {
-                // AI 评审，先从 PR 中提取 diff 信息，然后调用 AI 模型进行代码评审
-                let diff_hunks = diff.code_diffs()?;
-                let mut comments = Vec::new();
-                for diff_hunk in diff_hunks {
-                    println!("diff_hunk: {}", diff_hunk.to_string()?);
-                    let review_comment = openai.code_review(&diff_hunk).await?;
-                    // 代码 diff 信息 + AI 评审结果，组合成 Review Comments 信息
-                    comments.push(Comment::new_with_line(diff_hunk.filename(), review_comment, diff_hunk.last_line()));
-                }
-                Ok(comments)
-            });
-            handles.push(jh);
-        }
-        // 等待所有 handles 完成
-        let results = self.runtime.block_on(join_all(handles));
+        // 2 AI 评审, 由于API有限速，并发请求容易被限，改成顺序执行
+        // TODO 这里用的 RustGLM 客户端请求 ChatGLM 接口发现每次请求还会请求 sntp.aliyun.com 获取时间用于校验 jwt , 但是 sntp.aliyun.com 有请求限流，频繁调用后会抛 IOError
+        // 需要把 RustGLM 代码拉下来本地修复
+        let review_future = self.do_review(pr);
+        let comments = self.runtime.block_on(review_future)?;
 
         // 3 汇总AI评审结果在 PullRequest 的Review 列表下追加评论
         //   https://docs.github.com/zh/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
-        // 从 results 中提取Comment
-        for result in results {
-            match result {
-                Ok(result) => {
-                    match result {
-                        Ok(comment_vec) => comments.extend(comment_vec),  //Vec<T>::extend() 方法用于将一个可迭代对象中的元素追加到 Vec 的末尾。
-                        Err(err) => return Err(anyhow::Error::from(err)),
-                    }
-                }
-                Err(err) => return Err(anyhow::Error::from(err)),
-            }
-        }
         let cr_future = self.github.create_review(pr_number, comments);
-        let pr = self.runtime.block_on(cr_future)?;
+        let cr_result = self.runtime.block_on(cr_future)?;
 
         // 4 异步通知到企业微信
         // TODO
 
         println!("exit review!");
         Ok(())
+    }
+
+    async fn do_review(&self, pr: PullRequestDiffs) -> anyhow::Result<Vec<Comment>> {
+        let mut comments = Vec::new();
+        let diffs = pr.diffs_filtered();
+        for diff in diffs {
+            let openai = self.openai.clone();
+            // AI 评审，先从 PR 中提取 diff 信息，然后调用 AI 模型进行代码评审
+            let diff_hunks = diff.code_diffs()?;
+            for diff_hunk in diff_hunks {
+                println!("diff_hunk: {}", diff_hunk.to_string()?);
+                let review_comment = openai.code_review(&diff_hunk).await?;
+                // 代码 diff 信息 + AI 评审结果，组合成 Review Comments 信息
+                comments.push(Comment::new_with_line(diff_hunk.filename(), review_comment, diff_hunk.last_line()));
+            }
+        }
+        Ok(comments)
     }
 }
