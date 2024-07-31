@@ -3,6 +3,16 @@ name = "ai-code-reviewer"
 version = "0.1.0"
 edition = "2021"
 
+# 二进制文件定制化修改配置
+[[bin]]
+name = "ai-code-reviewer"
+path = "crates/core/main.rs"    # 指定main入口文件路径
+
+[workspace]
+members = [
+    "crates/rust-glm"
+]
+
 [dependencies]
 anyhow = "1.0.86"
 chrono = "0.4.38"
