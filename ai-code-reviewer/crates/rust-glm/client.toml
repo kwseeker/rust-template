@@ -1,0 +1,10 @@
+api_key="xxx.xxx"
+glm_model = "glm-4"
+log_level = "Debug"
+#assistant_role = "assistant"
+#max_tokens = 8192
+#system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
+#system_role = "system"
+#temp_float = 0.5
+#top_p_float = 0.9
+#user_role = "user"
