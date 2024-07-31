@@ -3,6 +3,9 @@ mod api_operation;
 mod async_invoke_method;
 mod sync_invoke_method;
 mod sse_invoke_method;
+mod glm_client;
+mod message;
+mod init;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,6 +13,7 @@ use futures_util::future::BoxFuture;
 use futures_util::FutureExt;
 use regex::Regex;
 
+/// 写法有点奇怪，输入输出并不是本体，不像OOP的写法， TODO 重构
 #[derive(Debug)]
 pub struct RustGLM {
     chatglm_response: String,
@@ -88,7 +92,7 @@ impl RustGLM {
         regex.is_match(&*input)
     }
 
-
+    /// 这个其实是发起请求，不是名字上的验证调用是否有效
     async fn is_call_valid(
         part1_content: String,
         part2_content: Arc<String>,
@@ -167,14 +171,27 @@ impl RustGLM {
         CallResult::Error("Unknown error".to_string())
     }
 
-
-    pub async fn rust_chat_glm(&mut self, api_key:Option<String>, glm_version: &str, user_config: &str) -> String {
+    /// 异步调用 Rust Chat GLM 接口，用于处理自然语言处理任务。
+    ///
+    /// RustGLM 调用 ChatGLM API 交互流程
+    /// 1.传参的方式传递请求配置
+    /// 2.解析 API_KEY, 并使用解析结果创建 JWT 令牌并自校验
+    /// 3.为每种调用方式设置一个闭包，用于向 ChatGLM 发起请求
+    /// # Arguments
+    /// * `api_key` - ChatGLM API KEY
+    /// * `glm_version` - 要使用的 ChatGLM 版本
+    /// * `user_config` - 用户配置的 JSON 字符串，用于自定义请求行为。
+    /// # Returns
+    /// * 返回 ChatGLM 接口响应结果
+    pub async fn rust_chat_glm(&mut self, api_key: Option<String>, glm_version: &str, user_config: &str) -> String {
         let user_in = &self.chatglm_input;
         let (mut part1_content, mut part2_content) = ("SSE".to_string(), String::new());
 
+        // 命令行每次可以选择使用调用方式 sse(默认) async sync，还有个 exit 用于退出， 比如 sse#<用户输入消息>
         let regex_input = Regex::new(r"([^#]+)#([^#]+)").unwrap();
         if let Some(captures_message) = regex_input.captures(user_in) {
             part1_content = captures_message.get(1).map_or_else(|| "SSE".to_string(), |m| m.as_str().to_string());
+            // part2 就是用户输入消息
             part2_content = captures_message.get(2).map_or_else(|| String::new(), |m| m.as_str().to_string());
         } else if !Self::regex_checker(&regex_input, &*user_in.clone()).await {
             part2_content = user_in.trim().to_string();
@@ -211,5 +228,22 @@ impl RustGLM {
 
     pub fn get_ai_response(&self) -> String {
         self.chatglm_response.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::RustGLM;
+
+    #[tokio::test]
+    async fn rust_chat_glm() {
+        let mut rust_glm = RustGLM::new().await;
+        let api_key = std::env::var("API_KEY").unwrap();
+        let user_in = String::from("SSE#讲个笑话");
+        rust_glm.set_user_input(user_in);
+        // Constants.toml 中是调用环境设置、以及聊天预设
+        let ai_response =
+            rust_glm.rust_chat_glm(Some(api_key), "glm-4", "Constants.toml").await;
+        assert!(!ai_response.is_empty());
     }
 }
