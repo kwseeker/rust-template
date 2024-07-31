@@ -1,0 +1,6 @@
+[package]
+name = "rust-glm"
+version = "0.1.5"   # 在RustGLM 0.1.4 版本上修改
+edition = "2021"
+
+[dependencies]
