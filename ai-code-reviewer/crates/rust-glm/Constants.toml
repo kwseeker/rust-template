@@ -1,0 +1,31 @@
+#Blueokanna Editted
+#Constant Version = 0.1.4
+
+[[ai_cogview_config_3]]
+model = "cogview-3"
+
+[[ai_config_glm3]]
+assistant_role = "assistant"
+language_model = "glm-3-turbo"
+max_tokens = 8192
+system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
+system_role = "system"
+temp_float = 0.5
+top_p_float = 0.9
+user_role = "user"
+
+[[ai_config_glm4]]
+assistant_role = "assistant"
+language_model = "glm-4"
+max_tokens = 8192
+system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
+system_role = "system"
+temp_float = 0.5
+top_p_float = 0.9
+user_role = "user"
+
+[[ai_config_glm4v]]
+model = "glm-4v"
+user_role = "user"
+
+
