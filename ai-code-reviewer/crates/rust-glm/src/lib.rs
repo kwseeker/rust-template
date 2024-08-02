@@ -6,6 +6,9 @@ mod sse_invoke_method;
 mod glm_client;
 mod message;
 mod init;
+mod api;
+mod jwt;
+mod models;
 
 use std::collections::HashMap;
 use std::sync::Arc;

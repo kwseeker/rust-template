@@ -1,15 +1,19 @@
 use std::fs::File;
 use std::io::Read;
-use anyhow::anyhow;
 use log::error;
 use serde_derive::Deserialize;
-use crate::init;
+use crate::{api, init};
+use crate::message::{Query, TransferMode};
+use crate::models::glm4::Glm4Config;
+use crate::models::GlmModel;
 
 /// GLM client configuration
-struct Config {
+#[derive(Clone)]
+pub struct Config {
     api_key: Option<ApiKey>,
     /// GLM language model
     glm_model: GlmModel,
+    glm_4: Option<Glm4Config>,
 }
 
 const CONFIG_FILE: &str = "client.toml";
@@ -19,6 +23,7 @@ impl Default for Config {
         let mut config = Config {
             api_key: ApiKey::load_from_env(),
             glm_model: GlmModel::Glm4,
+            glm_4: None,
         };
         // load settings from toml file if exists and override
         let low_level_config = LowLevelConfig::load_from_toml();
@@ -30,10 +35,21 @@ impl Default for Config {
                 if let Some(glm_model) = llc.glm_model {
                     config.glm_model = GlmModel::from_string(glm_model);
                 }
+                config.glm_4 = llc.glm_4;
             }
             Err(err) => error!("Error to load config from toml: {}", err)
         }
         config
+    }
+}
+
+impl Config {
+    pub fn glm_model(&self) -> &GlmModel {
+        &self.glm_model
+    }
+
+    pub fn glm4_config(&self) -> &Option<Glm4Config> {
+        &self.glm_4
     }
 }
 
@@ -42,6 +58,7 @@ struct LowLevelConfig {
     api_key: Option<String>,
     glm_model: Option<String>,
     log_level: Option<String>,
+    glm_4: Option<Glm4Config>,
 }
 
 impl LowLevelConfig {
@@ -70,7 +87,7 @@ impl GlmClientBuilder {
         }
     }
 
-    // 支持传参修改配置
+    // support modified by params
 
     pub fn glm_model(&mut self, glm_model: GlmModel) -> &mut GlmClientBuilder {
         self.config.glm_model = glm_model;
@@ -79,27 +96,39 @@ impl GlmClientBuilder {
 
     pub fn build(&self) -> GlmClient {
         GlmClient {
-
+            config: self.config.clone(),
         }
     }
 }
 
 /// GLM Rust SDK main struct
 struct GlmClient {
-
+    config: Config,
+    // invoker: Invoker,
 }
 
 impl GlmClient {
-    pub fn new() -> Self {
-        GlmClient {}
+    /// GlmClient call ChatGLM API（ https://open.bigmodel.cn/api/paas/v4/chat/completions）process
+    /// 1.
+    pub fn chat(&self, message: &str) -> () {
+        let query = Query::from_string(message, &self.config);
+        match query.trans_mode() {
+            TransferMode::Sse => {
+                api::invoke_sse(query);
+            }
+            TransferMode::Sync => {
+                // sync
+            }
+            TransferMode::Async => {
+                // async
+            }
+        }
     }
 
-    /// GlmClient 调用 ChatGLM API 流程
-    /// 2.解析 API_KEY, 并使用解析结果创建 JWT 令牌并自校验
-    /// 3.为每种调用方式设置一个闭包，用于向 ChatGLM 发起请求
-    pub fn chat(&self, message: String) -> () {}
+
 }
 
+#[derive(Clone)]
 struct ApiKey {
     user_id: String,
     secret_key: String,
@@ -143,31 +172,15 @@ impl ApiKey {
     }
 }
 
-/// SDK暂时只支持两种模型
-enum GlmModel {
-    Glm4,
-    Glm4_0520,
-}
-
-impl GlmModel {
-    fn from_string(model: String) -> GlmModel {
-        match model.as_str() {
-            "glm-4" => GlmModel::Glm4,
-            "glm-4-0520" => GlmModel::Glm4_0520,
-            _ => panic!("Invalid model"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::glm_client::{Config, GlmClient, GlmClientBuilder, LowLevelConfig};
+    use crate::glm_client::{GlmClientBuilder, LowLevelConfig};
 
     #[tokio::test]
     async fn chat() {
         ///
         let glm_client = GlmClientBuilder::new().build();
-        glm_client.chat("".to_string());
+        glm_client.chat("1+1=?");
 
         // // Constants.toml 中是调用环境设置、以及聊天预设
         // let ai_response =

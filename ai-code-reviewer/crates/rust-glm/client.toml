@@ -1,10 +1,27 @@
-api_key="xxx.xxx"
+api_key="xxx.yyy"
 glm_model = "glm-4"
 log_level = "Debug"
-#assistant_role = "assistant"
-#max_tokens = 8192
-#system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
-#system_role = "system"
-#temp_float = 0.5
-#top_p_float = 0.9
-#user_role = "user"
+
+[glm-4]
+# 模型编码
+model = "glm-4"
+# 是否启用采样策略
+do_sample = true
+# 采样温度，控制输出的随机性
+temperature = 0.95
+# 核取样
+top_p = 0.7
+# 模型输出最大 tokens，最大输出为4095，默认值为1024
+max_tokens = 4095
+# 模型在遇到stop所指定的字符时将停止生成，目前仅支持单个停止词
+stop = ["!STOP"]
+# tools
+# tool_choice
+# System Message content, 用于预设聊天场景
+system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
+
+#[cogview-3]
+# TODO
+
+#[codegeex-4]
+# TODO

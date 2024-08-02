@@ -19,7 +19,7 @@ serde = { version = "1.0.196", features = ["derive"] }
 regex = { version = "1.10.3"}
 tokio = { version = "1.35.1", features = ["full"] }
 time = "0.3.32"
-lazy_static = "1.4.0"
+lazy-static-example = "1.4.0"
 anyhow = "1.0.79"
 tokio-util = "0.7.10"
 futures-util = { version = "0.3.30", features = ["compat"] }
