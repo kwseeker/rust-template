@@ -8,7 +8,8 @@ use crate::message::Query;
 use crate::models::glm4;
 
 // SSE
-pub(crate) async fn invoke_sse(query: Query) -> anyhow::Result<String> {
+pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
+    let jwt = query.jwt();
     let request_body = glm4::RequestBody::assemble(query);
     let request = reqwest::Client::new()
         .post(glm4::API_URL)
@@ -16,13 +17,14 @@ pub(crate) async fn invoke_sse(query: Query) -> anyhow::Result<String> {
         .header("Connection", "keep-alive")
         .header("Accept", "text/event-stream")
         .header("Content-Type", "application/json;charset=UTF-8")
-        .header("Authorization", format!("Bearer {}", query.jwt()))
-        .json(request_body);
+        .header("Authorization", format!("Bearer {}", jwt))
+        .json(&request_body);
     let response = request.send().await?;
     // exception handling
     if !response.status().is_success() {
+        let status = response.status();
         let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error text".into());
-        return bail!("Request failed with status: {}, error: {}", response.status(), error_text);
+        bail!("Request failed with status: {}, error: {}", status, error_text);
     }
     // parse response
     let mut response_body = response.bytes_stream();
@@ -37,7 +39,7 @@ pub(crate) async fn invoke_sse(query: Query) -> anyhow::Result<String> {
                 }
             }
             Err(e) => {
-                return bail!("Error receiving SSE event: {}", e);
+                bail!("Error receiving SSE event: {}", e);
             }
         }
     }

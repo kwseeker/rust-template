@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::Read;
-use log::error;
+use log::{debug, error};
 use serde_derive::Deserialize;
 use crate::{api, init};
 use crate::message::{Query, TransferMode};
@@ -51,9 +51,18 @@ impl Config {
     pub fn glm4_config(&self) -> &Option<Glm4Config> {
         &self.glm_4
     }
+
+    pub fn api_key(&self) -> &ApiKey {
+        match &self.api_key {
+            Some(api_key) => {
+                return api_key;
+            }
+            None => panic!("Error: api key not existed!")
+        }
+    }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct LowLevelConfig {
     api_key: Option<String>,
     glm_model: Option<String>,
@@ -64,9 +73,13 @@ struct LowLevelConfig {
 impl LowLevelConfig {
     fn load_from_toml() -> anyhow::Result<LowLevelConfig> {
         let mut file = File::open(CONFIG_FILE)?;
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)?;
-        let config: LowLevelConfig = toml::from_str(&contents)?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        Self::from_string(content)
+    }
+
+    fn from_string(content: String) -> anyhow::Result<LowLevelConfig> {
+        let config: LowLevelConfig = toml::from_str(&content)?;
         config.init_log();
         Ok(config)
     }
@@ -110,11 +123,11 @@ struct GlmClient {
 impl GlmClient {
     /// GlmClient call ChatGLM API（ https://open.bigmodel.cn/api/paas/v4/chat/completions）process
     /// 1.
-    pub fn chat(&self, message: &str) -> () {
+    pub async fn chat(&self, message: &str) -> anyhow::Result<()> {
         let query = Query::from_string(message, &self.config);
         match query.trans_mode() {
             TransferMode::Sse => {
-                api::invoke_sse(query);
+                let result = api::invoke_sse(query).await?;
             }
             TransferMode::Sync => {
                 // sync
@@ -123,13 +136,16 @@ impl GlmClient {
                 // async
             }
         }
+
+        debug!("chat done!");
+        Ok(())
     }
 
 
 }
 
 #[derive(Clone)]
-struct ApiKey {
+pub(crate) struct ApiKey {
     user_id: String,
     secret_key: String,
 }
@@ -158,7 +174,7 @@ impl ApiKey {
         }
     }
 
-    fn from_string(api_key: String) -> Option<ApiKey> {
+    pub(crate) fn from_string(api_key: String) -> Option<ApiKey> {
         let api_key_parts: Vec<&str> = api_key.split('.').collect();
         if api_key_parts.len() != 2 {
             return None;
@@ -170,6 +186,14 @@ impl ApiKey {
             secret_key,
         })
     }
+
+    pub(crate) fn user_id(&self) -> &str {
+        &self.user_id
+    }
+
+    pub(crate) fn secret_key(&self) -> &str {
+        &self.secret_key
+    }
 }
 
 #[cfg(test)]
@@ -178,9 +202,8 @@ mod tests {
 
     #[tokio::test]
     async fn chat() {
-        ///
         let glm_client = GlmClientBuilder::new().build();
-        glm_client.chat("1+1=?");
+        glm_client.chat("1+1=?").await.expect("Some error occurred");
 
         // // Constants.toml 中是调用环境设置、以及聊天预设
         // let ai_response =
@@ -191,6 +214,35 @@ mod tests {
     #[test]
     fn load_from_toml() {
         let config = LowLevelConfig::load_from_toml();
+        assert!(config.is_ok())
+    }
+
+    #[test]
+    fn load_from_string() {
+        let content = r#"
+api_key="xxx.yyy"
+glm_model = "glm-4"
+log_level = "Debug"
+
+[glm_4]
+# 模型编码
+model = "glm-4"
+# 是否启用采样策略
+do_sample = true
+# 采样温度，控制输出的随机性
+temperature = 0.95
+# 核取样
+top_p = 0.7
+# 模型输出最大 tokens，最大输出为4095，默认值为1024
+max_tokens = 4095
+# 模型在遇到stop所指定的字符时将停止生成，目前仅支持单个停止词
+stop = ["!STOP"]
+#tools
+#tool_choice
+# System Message content, 用于预设聊天场景
+system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
+        "#;
+        let config = LowLevelConfig::from_string(content.to_string());
         assert!(config.is_ok())
     }
 }

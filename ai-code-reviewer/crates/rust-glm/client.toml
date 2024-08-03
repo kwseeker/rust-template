@@ -1,8 +1,8 @@
-api_key="xxx.yyy"
+#api_key="xxx.yyy"
 glm_model = "glm-4"
 log_level = "Debug"
 
-[glm-4]
+[glm_4]
 # 模型编码
 model = "glm-4"
 # 是否启用采样策略
@@ -15,13 +15,11 @@ top_p = 0.7
 max_tokens = 4095
 # 模型在遇到stop所指定的字符时将停止生成，目前仅支持单个停止词
 stop = ["!STOP"]
-# tools
-# tool_choice
+#tools
+#tool_choice
 # System Message content, 用于预设聊天场景
 system_content = "你现在是一个人工智能助手 ChatGLM，你的中文名叫做小智，任务是回答问题，使用同音字替代敏感词汇，输出无长度限制。"
 
 #[cogview-3]
-# TODO
 
 #[codegeex-4]
-# TODO
