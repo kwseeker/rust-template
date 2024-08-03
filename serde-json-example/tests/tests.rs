@@ -71,6 +71,23 @@ fn usage_for_array() {
         println!("{:?}", person);
     }
 }
+
+/// 测试目标：
+/// 1 测试JSON中存在但是结构体中不存在的字段能否影响反序列化，（并不影响）
+#[test]
+fn test_json_field_not_exist_in_struct() {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Person {
+        name: String,
+        age: u8,
+    }
+
+    let json_array_str = r#"{"name": "Alice", "age": 30, "country": "China"}"#;
+    let person: Person = serde_json::from_str(json_array_str)
+        .expect("JSON was not well-formatted");
+    println!("{:?}", person);
+}
+
 /// 测试目标：
 /// 1 枚举->字符串格式转换
 #[test]

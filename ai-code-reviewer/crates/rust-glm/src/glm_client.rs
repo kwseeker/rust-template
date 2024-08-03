@@ -122,12 +122,11 @@ struct GlmClient {
 
 impl GlmClient {
     /// GlmClient call ChatGLM API（ https://open.bigmodel.cn/api/paas/v4/chat/completions）process
-    /// 1.
     pub async fn chat(&self, message: &str) -> anyhow::Result<()> {
         let query = Query::from_string(message, &self.config);
         match query.trans_mode() {
             TransferMode::Sse => {
-                let result = api::invoke_sse(query).await?;
+                api::invoke_sse(query).await?;
             }
             TransferMode::Sync => {
                 // sync
@@ -140,8 +139,6 @@ impl GlmClient {
         debug!("chat done!");
         Ok(())
     }
-
-
 }
 
 #[derive(Clone)]
@@ -204,11 +201,6 @@ mod tests {
     async fn chat() {
         let glm_client = GlmClientBuilder::new().build();
         glm_client.chat("1+1=?").await.expect("Some error occurred");
-
-        // // Constants.toml 中是调用环境设置、以及聊天预设
-        // let ai_response =
-        //     rust_glm.rust_chat_glm(Some(api_key), "glm-4", "Constants.toml").await;
-        // assert!(!ai_response.is_empty());
     }
 
     #[test]

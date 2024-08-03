@@ -5,3 +5,5 @@ mod api;
 mod jwt;
 mod models;
 mod util;
+mod printer;
+mod context;

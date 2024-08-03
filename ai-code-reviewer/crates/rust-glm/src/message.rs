@@ -58,7 +58,9 @@ impl Message for UserMessage {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct AssistantMessage {
     role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<ToolCall>>,
 }
 
@@ -76,6 +78,7 @@ impl Message for AssistantMessage {
 struct ToolCall {
     id: String,
     _type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     function: Option<String>,
 }
 
@@ -147,9 +150,6 @@ impl Query<'_> {
         self.jwt.clone()
     }
 }
-
-/// ChatGLM reply message
-struct Reply {}
 
 pub(crate) enum TransferMode {
     /// stream
