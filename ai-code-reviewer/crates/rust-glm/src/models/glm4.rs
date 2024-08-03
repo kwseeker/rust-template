@@ -2,6 +2,7 @@ use log::debug;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::message::{Message, MessageType, Query, SystemMessage, UserMessage};
+use crate::printer;
 
 pub(crate) static API_URL: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 
@@ -70,4 +71,81 @@ impl RequestBody {
     }
 }
 
-pub(crate) struct ResponseBody {}
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ResponseChunk {
+    id: String,
+    created: u64,
+    choices: Vec<Choice>,
+    usage: Option<Usage>,
+    web_search: Option<Vec<WebSearch>>,
+}
+
+impl ResponseChunk {
+    pub(crate) fn from_string(chunk_json: &str) -> ResponseChunk {
+        // let chunk_json = reply.trim_start_matches("data: ");
+        let block: ResponseChunk = serde_json::from_str(chunk_json).unwrap();
+        block
+    }
+
+    pub(crate) fn print(&self) {
+        for choice in &self.choices {
+            printer::Standard::print(choice.delta.content.clone());
+        }
+    }
+
+    pub(crate) fn choices(&self) -> &Vec<Choice> {
+        &self.choices
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Choice {
+    index: u32,
+    finish_reason: Option<String>,
+    delta: Delta,
+}
+
+impl Choice {
+    pub(crate) fn delta(&self) -> &Delta {
+        &self.delta
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Delta {
+    role: String,
+    content: String,
+    // tool_calls: Vec<ToolCall>
+}
+
+impl Delta {
+    pub(crate) fn content(&self) -> &String {
+        &self.content
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Usage {
+    prompt_tokens: u32,
+    completion_tokens: u32,
+    total_tokens: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct WebSearch {
+    icon: String,
+    title: String,
+    link: String,
+    media: String,
+    content: String,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn response_chunk() {
+        let str = r#"{"id":"20240803193154672357f4d3ac4e2b","created":1722684714,"model":"glm-4","choices":[{"index":0,"delta":{"role":"assistant","content":"1"}}]}"#;
+        let response_chunk = super::ResponseChunk::from_string(str);
+        response_chunk.print();
+    }
+}

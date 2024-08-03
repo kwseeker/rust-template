@@ -1,0 +1,2 @@
+{"role":"user","content":"1+1=?"}
+{"role":"assistant","content":"1+1等于2。如果有其他问题或需要帮助，请随时告诉我。","tool_calls":null}
