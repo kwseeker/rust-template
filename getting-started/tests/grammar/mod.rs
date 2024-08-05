@@ -30,6 +30,8 @@ mod async_await;
 mod pointer_smart_rc_refcell;
 mod loop_match;
 mod lifetime_oom;
+mod pointer_smart_box;
+mod dynamic_dispatch;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]
