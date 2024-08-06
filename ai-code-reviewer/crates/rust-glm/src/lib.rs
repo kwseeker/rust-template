@@ -1,3 +1,6 @@
+// pub use: export
+pub use client::GlmClientBuilder;
+
 mod client;
 mod message;
 mod init;

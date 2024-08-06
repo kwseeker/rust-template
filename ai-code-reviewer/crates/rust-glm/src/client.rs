@@ -91,7 +91,7 @@ impl LowLevelConfig {
     }
 }
 
-struct GlmClientBuilder {
+pub struct GlmClientBuilder {
     config: Config,
 }
 
@@ -117,29 +117,29 @@ impl GlmClientBuilder {
 }
 
 /// GLM Rust SDK main struct
-struct GlmClient {
+pub struct GlmClient {
     config: Config,
     // invoker: Invoker,
 }
 
 impl GlmClient {
     /// GlmClient call ChatGLM API（ https://open.bigmodel.cn/api/paas/v4/chat/completions）process
-    pub async fn chat(&self, message: &str) -> anyhow::Result<()> {
+    pub async fn chat(&self, message: &str) -> anyhow::Result<String> {
         let query = Query::from_string(message, &self.config);
-        match query.trans_mode() {
+        let result: String = match query.trans_mode() {
             TransferMode::Sse => {
-                api::invoke_sse(query).await?;
+                api::invoke_sse(query).await?
             }
             TransferMode::Sync => {
-                // sync
+                todo!()
             }
             TransferMode::Async => {
-                // async
+                todo!()
             }
-        }
+        };
 
         debug!("chat done!");
-        Ok(())
+        Ok(result)
     }
 }
 

@@ -1,3 +1,4 @@
+use rust_glm::GlmClientBuilder;
 use crate::github::DiffHunk;
 
 /// OpenAI 客户端
@@ -23,11 +24,13 @@ impl OpenAI {
 
     pub(crate) async fn code_review(&self, diff_hunk: &DiffHunk) -> anyhow::Result<String> {
         println!("Review Begin ...");
-        let mut rust_glm = RustGLM::RustGLM::new().await;
-        rust_glm.set_user_input(diff_hunk.to_string()?);
-        let ai_response = rust_glm
-            .rust_chat_glm(Some(self.api_key.clone()), self.glm_version.clone(), self.config_file.clone()).await;
-        println!("Review Response: {ai_response}");
+        // let mut rust_glm = RustGLM::RustGLM::new().await;
+        // rust_glm.set_user_input(diff_hunk.to_string()?);
+        // let ai_response = rust_glm
+        //     .rust_chat_glm(Some(self.api_key.clone()), self.glm_version.clone(), self.config_file.clone()).await;
+        let glm_client = GlmClientBuilder::new().build();
+        let ai_response = glm_client.chat(diff_hunk.to_string()?.as_str()).await?;
+        println!("Review Response: {}", ai_response.clone());
         Ok(ai_response)
     }
 }

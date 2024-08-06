@@ -48,8 +48,6 @@ impl Reviewer {
         let pr = self.runtime.block_on(pr_future)?;
 
         // 2 AI 评审, 由于API有限速，并发请求容易被限，改成顺序执行
-        // TODO 这里用的 RustGLM 客户端请求 ChatGLM 接口发现每次请求还会请求 sntp.aliyun.com 获取时间用于校验 jwt , 但是 sntp.aliyun.com 有请求限流，频繁调用后会抛 IOError
-        // 需要把 RustGLM 代码拉下来本地修复
         let review_future = self.do_review(pr);
         let comments = self.runtime.block_on(review_future)?;
 

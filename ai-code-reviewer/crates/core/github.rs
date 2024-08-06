@@ -54,9 +54,12 @@ impl Github {
             Ok(response) => {
                 return if response.status().is_success() {
                     println!("Request {} succeeded!", url_cloned);
-                    let json_body: serde_json::Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
-                    // println!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
-                    let diffs: Vec<PullRequestDiff> = serde_json::value::from_value(json_body)
+                    let response_text = response.text().await?;
+                    let json_body: serde_json::Value = serde_json::from_str(&response_text).unwrap();
+                    println!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
+                    // let diffs: Vec<PullRequestDiff> = serde_json::value::from_value(json_body)
+                    //     .context("Parse json body to PullRequestDiffs object failed")?;
+                    let diffs: Vec<PullRequestDiff> = serde_json::from_str(&response_text)
                         .context("Parse json body to PullRequestDiffs object failed")?;
                     Ok(PullRequestDiffs {
                         diffs
@@ -253,6 +256,7 @@ impl PullRequestDiff {
             Some(Status::Added) => true,
             Some(Status::Modified) => true,
             Some(Status::Removed) => false,
+            Some(Status::Renamed) => true,
         };
         let need_review = need_review && Language::is_code_file(&self.filename);
         need_review
@@ -355,6 +359,7 @@ enum Status {
     Added,
     Modified,
     Removed,
+    Renamed,
 }
 
 enum Language {
