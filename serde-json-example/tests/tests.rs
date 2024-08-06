@@ -8,7 +8,8 @@ use serde_json;
 /// 4 Option 字段为空时反序列化
 #[test]
 fn usage() {
-    #[derive(Debug, Default, Serialize, Deserialize)]
+    // #[derive(Debug, Default, Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize)]
     #[serde(default)]
     struct User {
         name: String,
@@ -17,6 +18,18 @@ fn usage() {
         is_active: bool,
         addr: Addr,
         status: Option<Status>,
+    }
+
+    impl Default for User  {
+        fn default() -> Self {
+            User {
+                name: "".to_string(),
+                age: 30,
+                is_active: false,
+                addr: Addr::default(),
+                status: None,
+            }
+        }
     }
 
     #[derive(Debug, Default, Serialize, Deserialize)]

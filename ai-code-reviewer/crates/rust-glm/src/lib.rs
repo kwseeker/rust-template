@@ -1,4 +1,4 @@
-mod glm_client;
+mod client;
 mod message;
 mod init;
 mod api;
