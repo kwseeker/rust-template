@@ -1,0 +1,4 @@
+{"message":{"User":{"role":"user","content":"1+1=?"}},"tokens":43}
+{"message":{"Assistant":{"role":"assistant","content":"1+1等于2。"}},"tokens":8}
+{"message":{"User":{"role":"user","content":"1+1=?"}},"tokens":56}
+{"message":{"Assistant":{"role":"assistant","content":"一加一等于二。"}},"tokens":8}

@@ -5,13 +5,16 @@ use anyhow::bail;
 use futures_util::StreamExt;
 use log::debug;
 use crate::context;
-use crate::message::{AssistantMessage, Message, Query, UserMessage};
+use crate::context::ContextMessage;
+use crate::message::{AssistantMessage, Message, MessageType, Query, UserMessage};
 use crate::models::glm4;
-use crate::models::glm4::ResponseChunk;
+use crate::models::glm4::{ResponseChunk, Usage};
 
 lazy_static::lazy_static! {
     static ref UNICODE_REGEX: regex::Regex = regex::Regex::new(r"\\u[0-9a-fA-F]{4}").unwrap();
 }
+
+const RESPONSE_DONE: &str = "data: [DONE]";
 
 // SSE
 pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
@@ -40,7 +43,15 @@ pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
         match chunk {
             Ok(bytes) => {
                 let data = String::from_utf8_lossy(&bytes);
-                if data.contains("data: [DONE]") {  //TODO check
+                // finally statistics data and "data: [DONE]" maybe send back in one response body
+                if data.contains(RESPONSE_DONE) {
+                    let ri = data.rfind(RESPONSE_DONE).unwrap();
+                    let front_content = &data[..ri];
+                    if front_content.contains("data: ") {
+                        let li = data.find("data: ").unwrap();
+                        let statistics_content = &front_content[li..];
+                        sse_chunks.push_str(statistics_content);
+                    }
                     break;
                 }
                 let data = data.trim_start_matches("data: ");
@@ -67,6 +78,7 @@ pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: St
         .collect();
 
     let mut complete_content = String::new();
+    let mut usage= None;
     for chunk in chunks {
         let chunk = ResponseChunk::from_string(chunk);
         let chunk_content = chunk.choices()[0].delta().content();
@@ -78,15 +90,26 @@ pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: St
             .replace("\\\\nn", "\n")
             .replace("\\", "");
         complete_content.push_str(&content);
+
+        //count tokens cost, last chunk will return prompt and completion token costs
+        if let Some(u) = chunk.usage() {
+            usage = Some(u.clone());
+        }
     }
 
     if !complete_content.is_empty() {
         // store to context file
-        let writer = context::Writer::new();
         let user_message = UserMessage::new(query_message);
-        writer.append(serde_json::to_string(&user_message)?)?;
         let assistance_message = AssistantMessage::new(complete_content);
-        writer.append(serde_json::to_string(&assistance_message)?)?;
+        let (prompt_tokens, completion_tokens) = match usage {
+            Some(usage) => (usage.prompt_tokens(), usage.completion_tokens()),
+            None => (0, 0)
+        };
+        let context_messages = vec![
+            ContextMessage::new(MessageType::User(user_message), prompt_tokens),
+            ContextMessage::new(MessageType::Assistant(assistance_message), completion_tokens)];
+        let writer = context::Writer::new();
+        writer.append(context_messages)?;
     }
 
     Ok(())
@@ -101,4 +124,19 @@ fn convert_unicode_emojis(input: &str) -> String {
         emoji.to_string()
     })
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::api::RESPONSE_DONE;
+
+    #[test]
+    fn response_data() {
+        let str = r#"data: {"id":"20240806145645934a33f99eae4dc9","created":1722927405,"model":"glm-4","choices":[{"index":0,"finish_reason":"stop","delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":56,"completion_tokens":8,"total_tokens":64}}
+data: [DONE]
+"#;
+        let idx = str.rfind(RESPONSE_DONE).unwrap();
+        let prefix = &str[..idx];
+        println!("{prefix}")
+    }
 }

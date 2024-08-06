@@ -8,7 +8,7 @@ use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
 use sha2::Sha256;
-use crate::glm_client::ApiKey;
+use crate::client::ApiKey;
 use crate::util;
 
 lazy_static! {
@@ -135,7 +135,7 @@ impl Payload {
 mod tests {
     use std::thread;
     use std::time::Duration;
-    use crate::glm_client::ApiKey;
+    use crate::client::ApiKey;
     use crate::jwt::get_or_create_with_expired;
 
     #[test]

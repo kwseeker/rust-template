@@ -5,6 +5,8 @@ log_level = "Debug"
 [glm_4]
 # 模型编码
 model = "glm-4"
+# 上下文最大tokens，默认值为128k
+context_tokens = 128000
 # 是否启用采样策略
 do_sample = true
 # 采样温度，控制输出的随机性

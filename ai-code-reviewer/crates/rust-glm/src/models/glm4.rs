@@ -1,7 +1,9 @@
 use log::debug;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::context::Loader;
 use crate::message::{Message, MessageType, Query, SystemMessage, UserMessage};
+use crate::models::GlmModel;
 use crate::printer;
 
 pub(crate) static API_URL: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
@@ -9,12 +11,38 @@ pub(crate) static API_URL: &str = "https://open.bigmodel.cn/api/paas/v4/chat/com
 #[derive(Deserialize, Debug, Clone)]
 pub(crate) struct Glm4Config {
     model: String,
+    context_tokens: u32,
     do_sample: Option<bool>,
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
     stop: Option<Vec<String>>,
     system_content: Option<String>,
+}
+
+impl Default for Glm4Config {
+    fn default() -> Self {
+        Glm4Config {
+            model: GlmModel::Glm4.to_string(),
+            context_tokens: 128000,
+            do_sample: None,
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stop: None,
+            system_content: None,
+        }
+    }
+}
+
+impl Glm4Config {
+    fn system_content(&self) -> Option<String> {
+        self.system_content.clone()
+    }
+
+    fn context_tokens(&self) -> u32 {
+        self.context_tokens
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -35,34 +63,34 @@ impl RequestBody {
         let mut request_body = RequestBody::default();
 
         let config = query.config();
+        let glm4_config = config.glm4_config();
         request_body.model = config.glm_model().to_string();
-        request_body.messages = Self::assemble_messages(config.glm4_config(), query.message());
+        request_body.messages = Self::assemble_messages(glm4_config, query.message());
         request_body.user_id = Some(config.api_key().user_id().to_string());
         request_body.stream = query.trans_mode().is_stream();
 
-        let glm4_config = config.glm4_config();
-        if let Some(glm4_config) = glm4_config {
-            request_body.do_sample = glm4_config.do_sample;
-            request_body.temperature = glm4_config.temperature;
-            request_body.top_p = glm4_config.top_p;
-            request_body.max_tokens = glm4_config.max_tokens;
-            request_body.stop = glm4_config.stop.clone();
-        }
+        request_body.do_sample = glm4_config.do_sample;
+        request_body.temperature = glm4_config.temperature;
+        request_body.top_p = glm4_config.top_p;
+        request_body.max_tokens = glm4_config.max_tokens;
+        request_body.stop = glm4_config.stop.clone();
+
         debug!("Request body: {:#?}", serde_json::to_string(&request_body).unwrap());
         request_body
     }
 
     /// Assemble system message、user and assistance history message、current user message etc
-    fn assemble_messages(glm4_config: &Option<Glm4Config>, current_message: &String) -> Vec<Value> {
+    fn assemble_messages(glm4_config: &Glm4Config, current_message: &String) -> Vec<Value> {
         let mut messages: Vec<Value> = Vec::new();
         // System messages
-        if let Some(config) = glm4_config {
-            if let Some(content) = config.clone().system_content {
-                messages.push(SystemMessage::new(content).to_value());
-            }
+        if let Some(content) = glm4_config.system_content() {
+            messages.push(SystemMessage::new(content).to_value());
         }
-        // History messages
-
+        // 从 CONTEXT_FILE 中读取会话上下文历史消息
+        let context_messages = Loader::new().load(glm4_config.context_tokens()).unwrap();
+        for context_message in context_messages {
+            messages.push(context_message.message_value());
+        }
         // Current user messages
         messages.push(UserMessage::new(current_message.clone()).to_value());
         // Tool Messages, temporarily ignore
@@ -96,6 +124,10 @@ impl ResponseChunk {
     pub(crate) fn choices(&self) -> &Vec<Choice> {
         &self.choices
     }
+
+    pub(crate) fn usage(&self) -> &Option<Usage> {
+        &self.usage
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -124,11 +156,25 @@ impl Delta {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Usage {
     prompt_tokens: u32,
     completion_tokens: u32,
     total_tokens: u32,
+}
+
+impl Usage {
+    pub(crate) fn prompt_tokens(&self) -> u32 {
+        self.prompt_tokens
+    }
+
+    pub(crate) fn completion_tokens(&self) -> u32 {
+        self.completion_tokens
+    }
+
+    pub(crate) fn total_tokens(&self) -> u32 {
+        self.total_tokens
+    }
 }
 
 #[derive(Serialize, Deserialize)]

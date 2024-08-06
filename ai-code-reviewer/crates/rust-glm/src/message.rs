@@ -1,10 +1,10 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::{glm_client, jwt};
+use crate::{client, jwt};
 
 pub(crate) trait Message {
-    fn new(content: String) -> Self;
+    fn new(content: String) -> Self where Self: Sized;  // 对象安全的Trait要求不可分派的函数必须有 where Self: Sized 的约束
 
     fn to_value(&self) -> Value
     where Self: Serialize {
@@ -91,13 +91,17 @@ pub(crate) struct ToolMessage {
 
 impl Message for ToolMessage {
     fn new(content: String) -> Self {
-        todo!()
+        Self {
+            role: "tool".to_string(),
+            content,
+            tool_call_id: "".to_string(),   //TODO
+        }
     }
 }
 
 /// user query message
 pub struct Query<'c> {
-    config: &'c glm_client::Config,     //'c: just restrict Config object live longer enough than config
+    config: &'c client::Config,     //'c: just restrict Config object live longer enough than config
     /// transfer mode: Sse Sync Async
     trans_mode: TransferMode,
     /// message this query
@@ -110,7 +114,7 @@ pub struct Query<'c> {
 
 impl Query<'_> {
     /// construct query from chat message and client configuration
-    pub fn from_string<'a>(input: &'a str, config: &'a glm_client::Config) -> Query<'a> {   //这里'a实际最终是选择更小的约束，注意只是约束，不是将Query对象的生命周期设置为'a
+    pub fn from_string<'a>(input: &'a str, config: &'a client::Config) -> Query<'a> {   //这里'a实际最终是选择更小的约束，注意只是约束，不是将Query对象的生命周期设置为'a
         let (mut trans_type, mut message) = (String::new(), String::new());
 
         // every query can choose different invoke methods: sse(default) async sync，for example sse#<user_input>
@@ -134,7 +138,7 @@ impl Query<'_> {
         }
     }
 
-    pub(crate) fn config(&self) -> &glm_client::Config {
+    pub(crate) fn config(&self) -> &client::Config {
         self.config
     }
 

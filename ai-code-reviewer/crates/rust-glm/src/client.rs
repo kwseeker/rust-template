@@ -13,7 +13,7 @@ pub struct Config {
     api_key: Option<ApiKey>,
     /// GLM language model
     glm_model: GlmModel,
-    glm_4: Option<Glm4Config>,
+    glm_4: Glm4Config,
 }
 
 const CONFIG_FILE: &str = "client.toml";
@@ -23,7 +23,7 @@ impl Default for Config {
         let mut config = Config {
             api_key: ApiKey::load_from_env(),
             glm_model: GlmModel::Glm4,
-            glm_4: None,
+            glm_4: Glm4Config::default(),
         };
         // load settings from toml file if exists and override
         let low_level_config = LowLevelConfig::load_from_toml();
@@ -35,7 +35,9 @@ impl Default for Config {
                 if let Some(glm_model) = llc.glm_model {
                     config.glm_model = GlmModel::from_string(glm_model);
                 }
-                config.glm_4 = llc.glm_4;
+                if let Some(glm4_config) = llc.glm_4 {
+                    config.glm_4 = glm4_config;
+                }
             }
             Err(err) => error!("Error to load config from toml: {}", err)
         }
@@ -48,7 +50,7 @@ impl Config {
         &self.glm_model
     }
 
-    pub fn glm4_config(&self) -> &Option<Glm4Config> {
+    pub fn glm4_config(&self) -> &Glm4Config {
         &self.glm_4
     }
 
@@ -195,7 +197,7 @@ impl ApiKey {
 
 #[cfg(test)]
 mod tests {
-    use crate::glm_client::{GlmClientBuilder, LowLevelConfig};
+    use crate::client::{GlmClientBuilder, LowLevelConfig};
 
     #[tokio::test]
     async fn chat() {
