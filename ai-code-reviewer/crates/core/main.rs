@@ -23,7 +23,9 @@ fn main() {
     match result {
         Ok(_) => println!("AI code review done"),
         Err(err) => {
-            eprintln!("Error: {}", err);
+            // eprintln!("Error: {}", err); //这种方式无法打印出错误详细信息， panic!() 可以打印出详细错误信息, 不过是编译器实现的
+            // 另外也可以通过 error::Error 的特征方法挖掘错误详细信息
+            println!("Error: {err}, Cause by {}", err.source());
             std::process::exit(1);
         }
     }

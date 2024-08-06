@@ -1,5 +1,7 @@
 # rust-template
-rust基础、技术栈测试。
+rust基础入门、技术栈测试、项目实战。
+
+> Rust 不太容易学，里面有一些很新的概念，没有参照比较难理解，而且很难找到解释的清楚的资料，中文资料比较少，感觉需要多读标准库源码以及开源组件源码加深理解，搜索问题应该多用英语搜索，学习基础不要迷信 ChatGPT 等工具的解释很可能包含错误信息。
 
 模块说明：
 
@@ -13,27 +15,61 @@ rust基础、技术栈测试。
 
     从语法学习角度，项目可以覆盖 Rust 绝大部分语法。
 
++ **实战**
 
-+ **Web 服务**
+  + **ai-code-reviewer**
 
-  + **api-tpl-rs-example**
+    一个简单的 Github PR 代码 AI 自动评审工具，基于 Github Actions + Github API + ChatGLM。
 
-    基于 [api-tpl-rs](https://rustcc.cn/article?id=3b503d98-8215-4e9c-88d2-255db4bf228c) 脚手架实现的 Web 服务。
+  + **rust-glm**
 
-+ **命令行解析**
-  + clap-example
-  + lexopt-example
+    智谱 AI 大模型 ChatGLM Rust SDK。
 
-+ **其他工具类**
-
-  + **encoding-rs-io-example**
-
-    [encoding-rs-io]() 用于字符集编码转换，由于 Rust 默认使用 UTF-8 编码，Rust 读取其他编码数据时需要进行编码转换。
++ **技术栈测试**
 
 
-  + **walkdir-example**
+  + **Web 服务**
 
-    [walkdir]() 提供对工作目录进行处理的实用函数，比如递归遍历。
+    + **api-tpl-rs-example**
 
-+ todo ...
+      基于 [api-tpl-rs](https://rustcc.cn/article?id=3b503d98-8215-4e9c-88d2-255db4bf228c) 脚手架实现的 Web 服务。
+
+
+  + **错误处理**
+    + **anyhow-example**
+
+
+  + **命令行解析**
+    + **clap-example**
+    + **lexopt-example**
+
+
+
+  + **字符编码**
+
+    + **encoding-rs-io-example**
+
+      [encoding-rs-io]() 用于字符集编码转换，由于 Rust 默认使用 UTF-8 编码，Rust 读取其他编码数据时需要进行编码转换。
+
+  + **文件系统**
+
+
+      + **walkdir-example**
+
+        [walkdir]() 提供对工作目录进行处理的实用函数，比如递归遍历。
+
+
+  + **其他**
+    + **lazy-static-example**
+    + **rsntp-example**
+  + **正则表达式**
+    + **regex-example**
+  + **HTTP 请求**
+    + **reqwest-example**
+  + **序列化和反序列化**
+    + **serde-json-example**
+  + **异步编程**
+    + **tokio-example**
+  + **配置文件解析**
+    + **toml-example**
 
