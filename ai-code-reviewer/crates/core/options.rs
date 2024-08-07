@@ -1,8 +1,10 @@
 use std::env;
 use std::ffi::OsString;
 use std::fmt::Debug;
+use std::str::FromStr;
 use anyhow::{bail, Context};
 use lexopt::{Arg, Parser, ValueExt};
+use log::LevelFilter;
 
 /// 命令行参数
 #[derive(Debug)]
@@ -11,13 +13,16 @@ pub(crate) struct Args {
     /// OPTIONS:
     ///     --pr-number=[PR_NUMBER]     用于 pull_request 事件
     ///     --ref=[REF]                 用于 push 事件
+    ///     --log-level=[LOG_LEVEL]     用于设置日志级别
     event: Option<Event>,
+    log_level: LevelFilter,
 }
 
 impl Args {
     fn new() -> Self {
         Args {
             event: None,
+            log_level: LevelFilter::Info,
         }
     }
 
@@ -32,6 +37,10 @@ impl Args {
                 Ok(event)
             }
         }
+    }
+
+    pub(crate) fn log_level(&self) -> &LevelFilter {
+        &self.log_level
     }
 }
 
@@ -56,10 +65,21 @@ fn parse(argv: Vec<OsString>) -> anyhow::Result<Args> {
                 let ref_value = value.string().context("Invalid value (unparseable) for --pr-number")?;
                 args.event = Some(Event::Push(ref_value));
             },
+            Arg::Long("log-level") => {
+                let value = parser.value().context("Invalid value for --log-level")?;
+                let level_value = value.string().context("Invalid value (unparseable) for --log-level")?;
+                args.log_level = parse_log_level(level_value);
+            },
             _ => bail!("unknown option"),
         }
     }
     Ok(args)
+}
+
+pub fn parse_log_level(log_level: String) -> LevelFilter {
+    // String 转 LevelFilter
+    let level = LevelFilter::from_str(log_level.as_str());
+    level.unwrap_or_else(|_| LevelFilter::Info)
 }
 
 #[derive(Debug, PartialEq)]

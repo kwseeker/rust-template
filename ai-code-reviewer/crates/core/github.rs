@@ -88,7 +88,7 @@ impl Github {
             event: Some(ReviewEvent::Comment),    //AI 评审仅仅作为 Comment 建议，不记录投票，也不要求强制修改
             comments,
         });
-        let res = http_request::<ReviewBody>(&self.client, Method::GET, url, None, body).await;
+        let res = http_request::<ReviewBody>(&self.client, Method::POST, url, None, body).await;
         match res {
             Ok(response) => {
                 return if response.status().is_success() {

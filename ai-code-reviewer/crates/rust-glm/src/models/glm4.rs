@@ -110,7 +110,7 @@ pub(crate) struct ResponseChunk {
 
 impl ResponseChunk {
     pub(crate) fn from_string(chunk_json: &str) -> ResponseChunk {
-        // let chunk_json = reply.trim_start_matches("data: ");
+        let chunk_json = chunk_json.trim_start_matches("data: ");
         let block: ResponseChunk = serde_json::from_str(chunk_json).unwrap();
         block
     }
