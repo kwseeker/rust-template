@@ -82,13 +82,13 @@ impl LowLevelConfig {
 
     fn from_string(content: String) -> anyhow::Result<LowLevelConfig> {
         let config: LowLevelConfig = toml::from_str(&content)?;
-        config.init_log();
+        // config.init_log();
         Ok(config)
     }
 
-    fn init_log(&self) {
-        init::init_log(self.log_level.clone())
-    }
+    // fn init_log(&self) {
+    //     init::init_log(self.log_level.clone())
+    // }
 }
 
 pub struct GlmClientBuilder {
