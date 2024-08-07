@@ -1,0 +1,48 @@
+# AI 代码评审工作流
+name: AI Code Review
+on:
+  push:            # 在推送提交或标记或使用模板创建存储库时运行工作流
+    branches:
+      - 'master'
+      - 'releases/**'
+      - 'features/**'
+  pull_request:
+    types: [opened, reopened] # 在 Pull Request 被创建以及被重新打开时触发
+jobs:
+  Print-Event:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print event info
+        run: |
+          echo "::group::"
+          echo "Event Info: ${{ toJSON(github.event) }}"
+          echo "::endgroup::"
+  PR-Code-Review:   # 任务名称
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest    # 定义要运行任务的计算机类型
+    steps:
+      - name: Download reviewer   # 先下载二进制的 AI Code Reviewer, 本地在 Linux Mint 编译
+        # 这里的 “|” 和 shell 脚本中的 "\" 效果相同，表示作为一个整体执行
+        run: |
+          curl -LJO https://github.com/kwseeker/rust-template/raw/master/.github/tools/ai-code-reviewer
+      - name: Make executable
+        run: chmod +x ai-code-reviewer
+      - name: Execute AI code reviewer
+        run: |
+          echo "Event Name: ${{ github.event_name }}"
+          echo "PR Number: ${{ github.event.pull_request.number }}" |
+          ./ai-code-reviewer --pr-number=${{ github.event.pull_request.number }}
+#  Push-Code-Review: # 任务名称
+#    if: github.event_name == 'push'
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Download Reviewer
+#        run: |
+#          curl -LJO https://github.com/kwseeker/rust-template/raw/master/.github/tools/ai-code-reviewer
+#      - name: Make executable
+#        run: chmod +x ai-code-reviewer
+#      - name: Execute AI Code Reviewer
+#        run: |
+#          echo "Event Title: ${{ github.event.pull_request.title }}" |
+#          echo "PR Number: ${{ github.event.pull_request.number }}" |
+#          ./ai-code-reviewer --pr-number=${{ github.event.pull_request.number }}
