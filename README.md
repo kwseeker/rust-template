@@ -7,7 +7,7 @@ rust基础入门、技术栈测试、项目实战。
 
 + **入门**
 
-  + **getting-started**
+  + **getting-started （tiny-ripgrep）**
 
     Rust 语法入门练手项目（语法入门有项目支撑效果更好），功能是 grep 文本搜索，是开源项目 [ripgrep](https://github.com/BurntSushi/ripgrep) 的简化瘦身版本，代码数据结构和 ripgrep 保持一致，但是剔除了大部分不重要的功能（源码5W行压缩到7K行），只保留了核心功能和常用的选项。
 
@@ -17,13 +17,19 @@ rust基础入门、技术栈测试、项目实战。
 
 + **实战**
 
+  > 精力有限，这些项目仅仅实现了基础功能，不适合直接用于生产环境。
+
   + **ai-code-reviewer**
 
     一个简单的 Github PR 代码 AI 自动评审工具，基于 Github Actions + Github API + ChatGLM。
 
+    效果图：[ai-code-reviewer.md](docs/ai-code-reviewer.md)。
+
   + **rust-glm**
 
     智谱 AI 大模型 ChatGLM Rust SDK。
+
+    当前仅仅实现了 SSE。
 
 + **技术栈测试**
 
@@ -43,8 +49,6 @@ rust基础入门、技术栈测试、项目实战。
     + **clap-example**
     + **lexopt-example**
 
-
-
   + **字符编码**
 
     + **encoding-rs-io-example**
@@ -52,7 +56,6 @@ rust基础入门、技术栈测试、项目实战。
       [encoding-rs-io]() 用于字符集编码转换，由于 Rust 默认使用 UTF-8 编码，Rust 读取其他编码数据时需要进行编码转换。
 
   + **文件系统**
-
 
       + **walkdir-example**
 

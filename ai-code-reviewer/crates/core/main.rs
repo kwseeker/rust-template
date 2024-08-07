@@ -14,15 +14,16 @@ mod init;
 ///     --ref=[REF]                 用于 push 事件
 fn main() {
     debug!("Execute AI code review ...");
-    // 一些初始化
-    init::init();
     // 使用 lexopt 解析命令行参数
     let args = options::parse_env_args();
     if args.is_err() {
         panic!("Error: {}", args.unwrap_err());
     }
+    let args = args.unwrap();
+    // 一些初始化
+    init::init(&args);
 
-    let result = Reviewer::new().review(args.unwrap());
+    let result = Reviewer::new().review(args);
     match result {
         Ok(_) => info!("AI code review done"),
         Err(err) => {

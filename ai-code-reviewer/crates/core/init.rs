@@ -1,16 +1,12 @@
-use std::str::FromStr;
 use log::LevelFilter;
+use crate::options::Args;
 
-pub fn init() {
-    init_log(None);
+pub fn init(args: &Args) {
+    init_log(args.log_level().clone());
 }
 
-pub fn init_log(log_level: Option<String>) {
-    let log_level = log_level.as_ref()
-        .map_or_else(|| LevelFilter::Info, |level| {
-            LevelFilter::from_str(level).expect("Invalid log level format")
-        });
+pub fn init_log(level: LevelFilter) {
     env_logger::builder()
-        .filter_level(log_level)
+        .filter_level(level)
         .init();
 }

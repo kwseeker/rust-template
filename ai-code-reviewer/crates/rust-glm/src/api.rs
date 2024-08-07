@@ -4,6 +4,7 @@
 use anyhow::bail;
 use futures_util::StreamExt;
 use log::debug;
+use regex::Regex;
 use crate::context;
 use crate::context::ContextMessage;
 use crate::message::{AssistantMessage, Message, MessageType, Query, UserMessage};
@@ -15,6 +16,8 @@ lazy_static::lazy_static! {
 }
 
 const RESPONSE_DONE: &str = "data: [DONE]";
+const DONE: &str = "[DONE]";
+const DATA_PREFIX: &str = "data: ";
 
 // SSE
 pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
@@ -38,49 +41,59 @@ pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
     }
     // parse response
     let mut response_body = response.bytes_stream();
-    let mut sse_chunks = String::new();
+    let mut sse_chunks = Vec::new();
     while let Some(chunk) = response_body.next().await {
         match chunk {
-            Ok(bytes) => {
+            Ok(bytes) => { // !!! bytes may contain more than one data
                 let data = String::from_utf8_lossy(&bytes);
-                // finally statistics data and "data: [DONE]" maybe send back in one response body
-                if data.contains(RESPONSE_DONE) {
-                    let ri = data.rfind(RESPONSE_DONE).unwrap();
-                    let front_content = &data[..ri];
-                    if front_content.contains("data: ") {
-                        let li = data.find("data: ").unwrap();
-                        let statistics_content = &front_content[li..].trim_start_matches("data: ");
-                        sse_chunks.push_str(statistics_content);
+                let data_vec = extract_data_array(data.trim());
+                let mut quit = false;
+                for data in data_vec {
+                    if data.contains(DONE) {
+                        quit = true;
+                        break;
                     }
-                    break;
+                    debug!("chunk: {} >>>", data);
+                    sse_chunks.push(data.clone());
+                    let response_chunk = ResponseChunk::from_string(data.as_str());
+                    response_chunk.print();
                 }
-                let data = data.trim_start_matches("data: ");
-                // debug!("chunk: {}", data.to_string());
-                sse_chunks.push_str(data);
-                let response_chunk = ResponseChunk::from_string(data);
-                response_chunk.print();
             }
             Err(e) => {
                 bail!("Error receiving SSE event: {}", e);
             }
         }
     }
-    debug!("SSE chunks: {}", sse_chunks);
+    debug!("SSE chunks: {:?}", sse_chunks);
 
-    let response_content = invoke_sse_post_process(query_message, sse_chunks.clone())?;
+    let response_content = invoke_sse_post_process(query_message, sse_chunks)?;
     Ok(response_content)
 }
 
-pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: String) -> anyhow::Result<String> {
-    let chunks: Vec<&str> = response_chunks.lines()
-        .map(|line| line.trim_start_matches("data: "))
-        .filter(|line| !line.is_empty())
-        .collect();
+fn extract_data_array(chunk: &str) -> Vec<String> {
+    let mut data_array = Vec::new();
+    let mut raw = chunk;
+    while let Some(i) = raw.find(DATA_PREFIX) {
+        raw = &raw[i + DATA_PREFIX.len()..];
+        match raw.find(DATA_PREFIX) {
+            None => {
+                data_array.push(raw.trim().to_string());
+                break;
+            }
+            Some(i) => {
+                data_array.push(raw[..i].trim().to_string());
+                raw = &raw[i..];
+            }
+        }
+    }
+    data_array
+}
 
+pub(crate) fn invoke_sse_post_process(query_message: String, chunks: Vec<String>) -> anyhow::Result<String> {
     let mut complete_content = String::new();
-    let mut usage= None;
+    let mut usage = None;
     for chunk in chunks {
-        let chunk = ResponseChunk::from_string(chunk);
+        let chunk = ResponseChunk::from_string(chunk.as_str());
         let chunk_content = chunk.choices()[0].delta().content();
         let content = convert_unicode_emojis(chunk_content)
             .replace("\"", "")
@@ -128,7 +141,7 @@ fn convert_unicode_emojis(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::RESPONSE_DONE;
+    use crate::api::{extract_data_array, RESPONSE_DONE};
 
     #[test]
     fn response_data() {
@@ -138,5 +151,13 @@ data: [DONE]
         let idx = str.rfind(RESPONSE_DONE).unwrap();
         let prefix = &str[..idx];
         println!("{prefix}")
+    }
+
+    #[test]
+    fn split_data() {
+        let str = "data: [1, 2]\n data: [3, 4] data: [5, 6]";
+        let v = extract_data_array(str);
+        println!("{v:?}");
+        assert_eq!(v.len(), 3);
     }
 }
