@@ -1,6 +1,7 @@
 use std::ops::Add;
 use std::time::{Duration, Instant};
 use anyhow::{bail, Context};
+use log::{debug, error};
 use regex::Regex;
 use reqwest::{Client, Method, Response};
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -53,10 +54,10 @@ impl Github {
         match res {
             Ok(response) => {
                 return if response.status().is_success() {
-                    println!("Request {} succeeded!", url_cloned);
+                    debug!("Request {} succeeded!", url_cloned);
                     let response_text = response.text().await?;
                     let json_body: serde_json::Value = serde_json::from_str(&response_text).unwrap();
-                    println!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
+                    debug!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
                     // let diffs: Vec<PullRequestDiff> = serde_json::value::from_value(json_body)
                     //     .context("Parse json body to PullRequestDiffs object failed")?;
                     let diffs: Vec<PullRequestDiff> = serde_json::from_str(&response_text)
@@ -65,7 +66,7 @@ impl Github {
                         diffs
                     })
                 } else {
-                    println!("Request {} failed with status code: {}", url_cloned, response.status());
+                    error!("Request {} failed with status code: {}", url_cloned, response.status());
                     let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error text".into());
                     bail!(error_text)
                 }
@@ -91,12 +92,12 @@ impl Github {
         match res {
             Ok(response) => {
                 return if response.status().is_success() {
-                    println!("Request {} succeeded!", url_cloned);
+                    debug!("Request {} succeeded!", url_cloned);
                     // let json_body: serde_json::Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
-                    // println!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
+                    // debug!("Response json body {} succeeded!", serde_json::to_string_pretty(&json_body).unwrap());
                     Ok(())
                 } else {
-                    println!("Request {} failed with status code: {}", url_cloned, response.status());
+                    error!("Request {} failed with status code: {}", url_cloned, response.status());
                     let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error text".into());
                     bail!(error_text)
                 }
@@ -137,7 +138,7 @@ where
         .request(method, url)
         .headers(headers);
     if let Some(body) = body {
-        println!("Request body: {}", serde_json::to_string_pretty(&body).unwrap());
+        debug!("Request body: {}", serde_json::to_string_pretty(&body).unwrap());
         request_builder = request_builder.json(&body);  //json() 中泛型约束是 Serialize + ?Sized，因为这里&body 取的引用，所以只需要 body 实现了 Serialize Trait
     }
     let res = request_builder
@@ -145,7 +146,7 @@ where
         .send().await;
 
     let elapsed = now.elapsed();
-    println!("Time elapsed for request {url_cloned}: {:.2?}", elapsed);
+    debug!("Time elapsed for request {url_cloned}: {:.2?}", elapsed);
 
     match res {
         Ok(response) => Ok(response),
@@ -173,7 +174,7 @@ impl PullRequestDiffs {
             .filter(|diff| diff.need_review())
             .cloned()
             .collect();
-        // println!("diffs_filtered: {:?}", diffs);
+        // debug!("diffs_filtered: {:?}", diffs);
         diffs
     }
 }
@@ -513,6 +514,7 @@ enum ReviewEvent {
 #[cfg(test)]
 mod tests {
     use std::ops::Add;
+    use log::{debug, error};
     use reqwest::{Client, Method};
     use reqwest::header::{HeaderMap};
     use serde::Serialize;

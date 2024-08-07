@@ -1,9 +1,12 @@
 use std::sync::Arc;
+use log::debug;
 use tokio::runtime::Runtime;
 use crate::github::{Comment, Github, PullRequestDiffs};
 use crate::openai::OpenAI;
 use crate::options::Args;
 use crate::options::Event::{PullRequest, Push};
+
+const NO_SUGGESTION: &str = "666";
 
 /// AI代码审查器
 pub(crate) struct Reviewer {
@@ -59,7 +62,7 @@ impl Reviewer {
         // 4 异步通知到企业微信
         // TODO
 
-        println!("exit review!");
+        debug!("exit review!");
         Ok(())
     }
 
@@ -71,8 +74,11 @@ impl Reviewer {
             // AI 评审，先从 PR 中提取 diff 信息，然后调用 AI 模型进行代码评审
             let diff_hunks = diff.code_diffs()?;
             for diff_hunk in diff_hunks {
-                println!("diff_hunk: {}", diff_hunk.to_string()?);
+                debug!("diff_hunk: {}", diff_hunk.to_string()?);
                 let review_comment = openai.code_review(&diff_hunk).await?;
+                if review_comment.contains(NO_SUGGESTION) {
+                    continue;
+                }
                 // 代码 diff 信息 + AI 评审结果，组合成 Review Comments 信息
                 comments.push(Comment::new_with_line(diff_hunk.filename(), review_comment, diff_hunk.last_line()));
             }

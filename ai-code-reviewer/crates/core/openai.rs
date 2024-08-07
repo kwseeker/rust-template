@@ -1,3 +1,4 @@
+use log::debug;
 use rust_glm::GlmClientBuilder;
 use crate::github::DiffHunk;
 
@@ -14,7 +15,7 @@ pub(crate) struct OpenAI {
 impl OpenAI {
     pub(crate) fn new() -> Self {
         let api_key = std::env::var("CHATGLM_API_KEY").unwrap();
-        println!("CHATGLM_API_KEY: {api_key}");
+        debug!("CHATGLM_API_KEY: {api_key}");
         OpenAI {
             api_key,
             glm_version: "glm-4",
@@ -23,14 +24,14 @@ impl OpenAI {
     }
 
     pub(crate) async fn code_review(&self, diff_hunk: &DiffHunk) -> anyhow::Result<String> {
-        println!("Review Begin ...");
+        debug!("Review Begin ...");
         // let mut rust_glm = RustGLM::RustGLM::new().await;
         // rust_glm.set_user_input(diff_hunk.to_string()?);
         // let ai_response = rust_glm
         //     .rust_chat_glm(Some(self.api_key.clone()), self.glm_version.clone(), self.config_file.clone()).await;
         let glm_client = GlmClientBuilder::new().build();
         let ai_response = glm_client.chat(diff_hunk.to_string()?.as_str()).await?;
-        println!("Review Response: {}", ai_response.clone());
+        debug!("Review Response: {}", ai_response.clone());
         Ok(ai_response)
     }
 }

@@ -11,3 +11,4 @@ cargo-timing.html
 *.drawio.bkp
 
 **/chatglm_history.json
+**/context.txt

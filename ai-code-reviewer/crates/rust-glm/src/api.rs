@@ -49,7 +49,7 @@ pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
                     let front_content = &data[..ri];
                     if front_content.contains("data: ") {
                         let li = data.find("data: ").unwrap();
-                        let statistics_content = &front_content[li..];
+                        let statistics_content = &front_content[li..].trim_start_matches("data: ");
                         sse_chunks.push_str(statistics_content);
                     }
                     break;
@@ -67,11 +67,11 @@ pub(crate) async fn invoke_sse(query: Query<'_>) -> anyhow::Result<String> {
     }
     debug!("SSE chunks: {}", sse_chunks);
 
-    invoke_sse_post_process(query_message, sse_chunks.clone())?;
-    Ok(sse_chunks)
+    let response_content = invoke_sse_post_process(query_message, sse_chunks.clone())?;
+    Ok(response_content)
 }
 
-pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: String) -> anyhow::Result<()> {
+pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: String) -> anyhow::Result<String> {
     let chunks: Vec<&str> = response_chunks.lines()
         .map(|line| line.trim_start_matches("data: "))
         .filter(|line| !line.is_empty())
@@ -100,7 +100,7 @@ pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: St
     if !complete_content.is_empty() {
         // store to context file
         let user_message = UserMessage::new(query_message);
-        let assistance_message = AssistantMessage::new(complete_content);
+        let assistance_message = AssistantMessage::new(complete_content.clone());
         let (prompt_tokens, completion_tokens) = match usage {
             Some(usage) => (usage.prompt_tokens(), usage.completion_tokens()),
             None => (0, 0)
@@ -112,7 +112,7 @@ pub(crate) fn invoke_sse_post_process(query_message: String, response_chunks: St
         writer.append(context_messages)?;
     }
 
-    Ok(())
+    Ok(complete_content)
 }
 
 fn convert_unicode_emojis(input: &str) -> String {

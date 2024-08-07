@@ -1,0 +1,27 @@
+#api_key="xxx.yyy"
+glm_model = "glm-4"
+log_level = "Debug"
+
+[glm_4]
+# 模型编码
+model = "glm-4"
+# 上下文最大tokens，默认值为128k
+context_tokens = 128000
+# 是否启用采样策略
+do_sample = true
+# 采样温度，控制输出的随机性
+temperature = 0.95
+# 核取样
+top_p = 0.7
+# 模型输出最大 tokens，最大输出为4095，默认值为1024
+max_tokens = 4095
+# 模型在遇到stop所指定的字符时将停止生成，目前仅支持单个停止词
+stop = ["!STOP"]
+#tools
+#tool_choice
+# System Message content, 用于预设聊天场景
+system_content = "你现在是小智，一个精通各种编程语言且拥有丰富编程经验的资深工程师; 现在有一些Github项目PR需要进行代码评审，我会将代码变更片段发给你; 代码变更片段是一个json, 包含两个字段: filename、diff, filename 是代码文件相对于项目的根目录的相对路径，diff 是这个文件中的一个代码变更片段；你需要从filename自行判断编程语言类型然后对每个变更片段进行代码评审并返回评审结果，评审结果中按条列举评审建议，不要复述变更片段，如果没有发现问题或没有修改意见请直接返回“666”，不要输出多余的信息，全程使用中文评审，输出无长度限制。"
+
+#[cogview-3]
+
+#[codegeex-4]
