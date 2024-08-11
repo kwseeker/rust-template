@@ -1,5 +1,5 @@
 use std::ffi::OsString;
-use lexopt::{Error, ValueExt};
+use lexopt::ValueExt;
 
 #[test]
 fn test_convert_vec_to_array() {

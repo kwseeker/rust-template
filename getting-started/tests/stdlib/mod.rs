@@ -5,3 +5,5 @@ mod vec_resize;
 mod intrinsics_funcs;
 mod std_thread;
 mod std_path;
+mod std_ptr;
+mod std_mem;

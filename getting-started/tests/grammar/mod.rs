@@ -32,7 +32,6 @@ mod loop_match;
 mod lifetime_oom;
 mod pointer_smart_box;
 mod dynamic_dispatch;
-mod error_handle;
 
 // mod.rs中也可以定义测试
 #[cfg(test)]
